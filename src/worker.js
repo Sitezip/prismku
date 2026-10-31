@@ -32,15 +32,22 @@ async function sha256(s) {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function rateLimit(env, request, action, max) {
+async function ipHash(env, request) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-  const iph = (await sha256(`${ip}|${env.RL_SALT || 'prismku'}|${utcDay()}`)).slice(0, 24);
-  const window = Math.floor(Date.now() / 60000);
+  return (await sha256(`${ip}|${env.RL_SALT || 'prismku'}|${utcDay()}`)).slice(0, 24);
+}
+
+// perDay=true: one counter per UTC day (row kept until the day ends), else per minute.
+async function rateLimit(env, request, action, max, perDay = false) {
+  const iph = await ipHash(env, request);
+  const minute = Math.floor(Date.now() / 60000);
+  const window = perDay ? Math.floor((Date.parse(utcDay()) + 86400000) / 60000) : minute;
+  const bucket = perDay ? utcDay() : minute;
   const row = await env.DB.prepare(
     `INSERT INTO rate_limits (key, window, count) VALUES (?1, ?2, 1)
      ON CONFLICT(key) DO UPDATE SET count = count + 1 RETURNING count`
-  ).bind(`${iph}:${action}:${window}`, window).first();
-  if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM rate_limits WHERE window < ?').bind(window - 5).run();
+  ).bind(`${iph}:${action}:${bucket}`, window).first();
+  if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM rate_limits WHERE window < ?').bind(minute - 5).run();
   return row.count <= max;
 }
 
@@ -207,6 +214,38 @@ async function submitScore(env, request) {
     achievements: newly.map(c => ({ code: c, title: ACH[c] })) });
 }
 
+const FEEDBACK_TYPES = ['bug', 'idea', 'other'];
+const EMAIL_RE = /^[^\s@<>()"',;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}$/;
+const CTX_KEYS = { version: 20, mode: 10, seed: 12, daily: 5, day: 10, ua: 300, screen: 20, viewport: 20, url: 200, playerId: 36, theme: 12, cb: 5, lang: 20, solved: 5, elapsedMs: 12 };
+
+async function submitFeedback(env, request) {
+  const b = await readJson(request);
+  // Honeypot: real players never see or fill this field. Pretend success, store nothing.
+  if (b.website) return json({ ok: true, id: null });
+  const type = String(b.type || '');
+  if (!FEEDBACK_TYPES.includes(type)) return err('pick bug, idea or other');
+  const message = typeof b.message === 'string' ? b.message.replace(/\r\n/g, '\n').trim() : '';
+  if (message.length < 5) return err('please write a little more (5+ characters)');
+  if (message.length > 1000) return err('message is too long (max 1000 characters)');
+  let contact = typeof b.contact === 'string' ? b.contact.trim() : '';
+  if (contact && (contact.length > 254 || !EMAIL_RE.test(contact))) return err('that email address looks invalid');
+  const ctx = {};
+  if (b.context && typeof b.context === 'object') {
+    for (const [k, max] of Object.entries(CTX_KEYS)) {
+      const v = b.context[k];
+      if (v === undefined || v === null) continue;
+      ctx[k] = typeof v === 'number' || typeof v === 'boolean' ? v : String(v).slice(0, max);
+    }
+  }
+  ctx.country = request.cf?.country || null;
+  // Rate limit only well-formed tickets (invalid ones never touch the table).
+  if (!await rateLimit(env, request, 'feedback', 5)) return err('slow down — try again in a minute', 429);
+  if (!await rateLimit(env, request, 'feedback-day', 20, true)) return err('daily feedback limit reached — thank you!', 429);
+  const row = await env.DB.prepare('INSERT INTO feedback (created_at, type, message, contact, context, status, ip_hash) VALUES (?,?,?,?,?,?,?) RETURNING id')
+    .bind(Date.now(), type, message, contact || null, JSON.stringify(ctx), 'new', await ipHash(env, request)).first();
+  return json({ ok: true, id: row.id });
+}
+
 async function leaderboard(env, url) {
   const mode = url.searchParams.get('mode') || 'easy';
   if (!MODES[mode]) return err('bad mode');
@@ -258,6 +297,7 @@ async function api(request, env, url) {
   }
   if (path === '/api/player' && m === 'POST') return upsertPlayer(env, request);
   if (path === '/api/scores' && m === 'POST') return submitScore(env, request);
+  if (path === '/api/feedback' && m === 'POST') return submitFeedback(env, request);
   if (path === '/api/leaderboard' && m === 'GET') return leaderboard(env, url);
   if (path === '/api/me' && m === 'GET') return me(env, url);
   if (path === '/api/stats' && m === 'GET') return stats(env);

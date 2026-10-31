@@ -76,6 +76,7 @@ let sel = -1;          // selected cell
 let brush = 0;         // armed color
 let serverDay = utcDay();
 let tick = null;
+const dlgState = {}; // UI state for the open dialog (kept off DOM attributes so closest() never matches the dialog)
 
 function progressKey(play, mode, day) { return play === 'daily' ? `prog.daily.${day}.${mode}` : `prog.free.${mode}`; }
 
@@ -313,7 +314,8 @@ function showWin() {
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
     <button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
-    <button class="btn" data-act="lb">Leaderboard</button></div>`);
+    <button class="btn" data-act="lb">Leaderboard</button>
+    <button class="btn" data-act="feedback">💬 Feedback</button></div>`);
 }
 
 function showDoneState() {
@@ -343,7 +345,7 @@ async function showLeaderboard(mode = G.mode, scope = 'daily') {
     <div class="seg" style="margin-bottom:8px">${['daily', 'week', 'all'].map(s => `<button data-lbscope="${s}" class="${s === scope ? 'on' : ''}">${{ daily: 'Today', week: 'This week', all: 'All time' }[s]}</button>`).join('')}</div>
     <div class="seg" style="margin-bottom:10px">${MODE_KEYS.map(k => `<button data-lbmode="${k}" class="${k === mode ? 'on' : ''}">${MODES[k].label}</button>`).join('')}</div>
     <div id="lb-body"><p class="tip">Loading…</p></div>`);
-  $('#dlg').dataset.lbmode = mode; $('#dlg').dataset.lbscope = scope;
+  dlgState.lbmode = mode; dlgState.lbscope = scope;
   const r = await api(`leaderboard?mode=${mode}&scope=${scope}&me=${player.id}`);
   const body = $('#lb-body'); if (!body) return;
   if (!r.ok) { body.innerHTML = '<p class="tip">Leaderboard unavailable right now.</p>'; return; }
@@ -372,8 +374,38 @@ function showHelp() {
     <p>👉 Tap a tile, then tap a color. Or tap a color first to “paint” several tiles.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
-    <p>◐ turns on symbols for colorblind-friendly play.</p>
+    <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
     <div class="row"><button class="btn primary" data-act="close">Let’s play</button></div>`);
+}
+
+// ---------- feedback ----------
+function feedbackContext() {
+  const c = { version: CONFIG.version, ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio || 1}`,
+    viewport: `${innerWidth}x${innerHeight}`, url: location.pathname, theme: settings.theme, cb: settings.cb, lang: navigator.language };
+  if (G) Object.assign(c, { mode: G.mode, seed: G.seed, daily: G.play === 'daily', day: G.day, solved: !!G.done, elapsedMs: Math.round(elapsed()) });
+  if (player.registered) c.playerId = player.id;
+  return c;
+}
+function showFeedback(type = 'bug') {
+  const ctx = feedbackContext();
+  openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>💬 Feedback & bug reports</h3>
+    <p class="tip" style="text-align:left">Found a bug or have an idea? Tell us — every ticket is read.</p>
+    <div class="seg" id="fb-type" role="radiogroup" aria-label="Type">${[['bug', '🐞 Bug'], ['idea', '💡 Idea'], ['other', '✉️ Other']].map(([k, l]) => `<button type="button" role="radio" data-fbtype="${k}" class="${k === type ? 'on' : ''}" aria-checked="${k === type}">${l}</button>`).join('')}</div>
+    <label class="fb-field">Message <span class="fb-count" id="fb-count">0/1000</span><textarea id="fb-msg" maxlength="1000" placeholder="What happened? What did you expect?"></textarea></label>
+    <label class="fb-field">Email (optional, only if you want a reply)<input type="email" id="fb-contact" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
+    <label class="hp" aria-hidden="true">Website<input type="text" id="fb-website" tabindex="-1" autocomplete="off"></label>
+    <p class="fb-ctx">Attached automatically: v${esc(ctx.version)}${ctx.mode ? ` · ${esc(MODES[ctx.mode].label)} · seed ${ctx.seed}${ctx.daily ? ' (daily)' : ''}` : ''} · ${esc(ctx.viewport)} · your browser’s user agent.</p>
+    <div class="row"><button class="btn primary" data-act="fb-send" id="fb-send">Send</button><button class="btn" data-act="close">Cancel</button></div>`);
+  dlgState.fbtype = type;
+  const msg = $('#fb-msg'); msg.addEventListener('input', () => { $('#fb-count').textContent = `${msg.value.length}/1000`; }); msg.focus();
+}
+async function sendFeedback() {
+  const message = $('#fb-msg').value.trim(), contact = $('#fb-contact').value.trim();
+  if (message.length < 5) { toast('Please write a little more'); return; }
+  const btn = $('#fb-send'); btn.disabled = true; btn.textContent = 'Sending…';
+  const r = await api('feedback', { type: dlgState.fbtype || 'bug', message, contact, website: $('#fb-website').value, context: feedbackContext() }).catch(() => ({ ok: false }));
+  if (r.ok) { closeDlg(); toast(r.id ? `Thanks! Ticket #${r.id} received 💜` : 'Thanks! 💜', 3500); }
+  else { btn.disabled = false; btn.textContent = 'Send'; toast(r.error || 'Could not send — please try again'); }
 }
 
 // ---------- community ----------
@@ -403,7 +435,7 @@ $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').
 $('#btn-erase').onclick = () => { if (sel >= 0) place(sel, 0); else toast('Select a tile to erase'); };
 $('#btn-new').onclick = () => { store.del(progressKey('free', G.mode)); newGame('free', G.mode, randomSeed()); };
 $('#btn-board').onclick = () => showLeaderboard();
-$('#btn-me').onclick = showMe; $('#btn-help').onclick = showHelp;
+$('#btn-me').onclick = showMe; $('#btn-help').onclick = showHelp; $('#btn-feedback').onclick = () => showFeedback();
 $('#btn-sound').onclick = () => { settings.sound = !settings.sound; saveSettings(); applySettings(); if (settings.sound) tone(880); };
 $('#btn-cb').onclick = () => { settings.cb = !settings.cb; saveSettings(); applySettings(); toast(settings.cb ? 'Symbols on' : 'Symbols off', 1200); };
 document.querySelectorAll('[data-play]').forEach(b => b.onclick = () => startMode(b.dataset.play, G.mode));
@@ -420,12 +452,16 @@ function startMode(play, mode) {
 $('#dlg').addEventListener('click', async e => {
   if (e.target === $('#dlg')) return closeDlg();
   const a = e.target.closest('[data-act]')?.dataset.act;
+  const fbt = e.target.closest('[data-fbtype]');
+  if (fbt) { dlgState.fbtype = fbt.dataset.fbtype; document.querySelectorAll('[data-fbtype]').forEach(b => { b.classList.toggle('on', b === fbt); b.setAttribute('aria-checked', b === fbt); }); return; }
   const lbm = e.target.closest('[data-lbmode]'), lbs = e.target.closest('[data-lbscope]'), th = e.target.closest('[data-theme]');
-  if (lbm) return showLeaderboard(lbm.dataset.lbmode, $('#dlg').dataset.lbscope);
-  if (lbs) return showLeaderboard($('#dlg').dataset.lbmode, lbs.dataset.lbscope);
+  if (lbm) return showLeaderboard(lbm.dataset.lbmode, dlgState.lbscope);
+  if (lbs) return showLeaderboard(dlgState.lbmode, lbs.dataset.lbscope);
   if (th) { if (th.dataset.pro && CONFIG.pro.enabled && !store.get('pro', false, 'pk.')) { if (CONFIG.pro.checkoutUrl) location.href = CONFIG.pro.checkoutUrl; return; } settings.theme = th.dataset.theme; saveSettings(); applySettings(); return showMe(); }
   if (a === 'close') closeDlg();
   if (a === 'share') share();
+  if (a === 'feedback') showFeedback();
+  if (a === 'fb-send') sendFeedback();
   if (a === 'lb') showLeaderboard(G.mode, G.play === 'daily' ? 'daily' : 'all');
   if (a === 'next') { closeDlg(); if (G.play === 'daily') startMode('free', G.mode); else $('#btn-new').click(); }
   if (a === 'save-nick') {
@@ -433,7 +469,10 @@ $('#dlg').addEventListener('click', async e => {
     if (await ensureRegistered(nick)) { toast('Nickname saved: ' + player.nick); if (G.done && !G.result?.submitted) { await submit(); if ($('#win-extra')) $('#win-extra').innerHTML = winExtra(); } }
   }
 });
-document.addEventListener('click', e => { if (e.target.closest('[data-act="showwin"]')) { e.preventDefault(); showWin(); } });
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-act="showwin"]')) { e.preventDefault(); showWin(); }
+  if (!e.target.closest('#dlg') && e.target.closest('[data-act="feedback"]')) { e.preventDefault(); showFeedback(); }
+});
 
 document.addEventListener('keydown', e => {
   if ($('#dlg').open || e.target.tagName === 'INPUT' || !G) return;
@@ -483,7 +522,8 @@ function monetization() {
   const mode = MODES[settings.mode] ? settings.mode : 'easy';
   startMode(settings.play === 'free' ? 'free' : 'daily', mode);
   loadCommunity();
-  if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
+  if (location.hash === '#feedback') showFeedback();
+  else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
   window.__prismku = { get G() { return G; }, place, hint };
 })();

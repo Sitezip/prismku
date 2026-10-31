@@ -1,0 +1,25 @@
+// Feedback modal UI test: BASE=... node test/feedback-ui.test.mjs  (submits one ticket containing "UI TEST TICKET")
+import puppeteer from 'puppeteer-core';
+import assert from 'node:assert/strict';
+const BASE = process.env.BASE || 'http://127.0.0.1:8787', OUT = process.env.OUT || '/tmp';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage(); await p.setViewport({ width: 375, height: 740, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+const errors = []; p.on('pageerror', e => errors.push(e.message));
+await p.goto(BASE + '/', { waitUntil: 'networkidle0' });
+await p.evaluate(() => document.querySelector('#dlg').close());
+assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no overflow with 6 header buttons');
+await p.screenshot({ path: `${OUT}/fb-header.png` });
+await p.click('#btn-feedback');
+await p.click('[data-fbtype="idea"]');
+await p.type('#fb-msg', 'UI TEST TICKET — delete me');
+await p.screenshot({ path: `${OUT}/fb-modal.png` });
+const [resp] = await Promise.all([p.waitForResponse(r => r.url().endsWith('/api/feedback')), p.click('#fb-send')]);
+const data = await resp.json();
+assert.ok(data.ok && data.id, JSON.stringify(data));
+await new Promise(r => setTimeout(r, 400));
+const toast = await p.$eval('#toast', t => t.textContent);
+assert.match(toast, /Ticket #\d+/);
+console.log('ticket', data.id, '·', toast);
+await b.close();
+assert.deepEqual(errors, []);
+console.log('feedback UI test passed');

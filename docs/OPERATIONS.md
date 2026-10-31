@@ -19,3 +19,33 @@
    - New D1 migrations: run the SQL through `/d1/database/{id}/query` and insert the file name into `d1_migrations`.
 
 Each release stays playable at `/v/<date>/`; `/versions/` lists them all.
+
+## Player feedback tickets (D1 table `feedback`)
+Players send tickets from the 💬 button (header), the footer link, `/#feedback`, or the win dialog.
+`POST /api/feedback` validates type (bug|idea|other), message (5–1000 chars), optional email, drops honeypot
+(`website`) submissions silently, and rate-limits per IP hash (5/minute, 20/day; only well-formed tickets count). Context JSON holds version,
+mode, seed, daily/day, solved, elapsedMs, user agent, screen, viewport, path, theme, colorblind, language,
+playerId (if registered) and country.
+
+Read them with the Cloudflare connector: `POST /accounts/{account_id}/d1/database/db3c2c9f-c4c6-425e-9699-0ea8250505a8/query`
+with `{"sql": "..."}`.
+
+```sql
+-- New tickets, newest first (times shown in UTC)
+SELECT id, datetime(created_at/1000, 'unixepoch') AS created_utc, type, message, contact,
+       json_extract(context, '$.version') AS version, json_extract(context, '$.mode') AS mode,
+       json_extract(context, '$.seed') AS seed, json_extract(context, '$.viewport') AS viewport
+FROM feedback WHERE status = 'new' ORDER BY created_at DESC LIMIT 50;
+
+-- Full context for one ticket
+SELECT * FROM feedback WHERE id = 1;
+
+-- Counts by status / type
+SELECT status, type, COUNT(*) FROM feedback GROUP BY status, type;
+
+-- Triage (status: new | triaged | done | wontfix | spam)
+UPDATE feedback SET status = 'triaged' WHERE id = 1;
+
+-- Possible abuse: many tickets from one IP hash (hash rotates daily)
+SELECT ip_hash, COUNT(*) n FROM feedback GROUP BY ip_hash HAVING n > 5 ORDER BY n DESC;
+```

@@ -29,3 +29,18 @@ const me = await j('me?id=' + id); assert.ok(me.achievements.length >= 2); conso
 const st = await j('stats'); assert.ok(st.gamesTotal >= 2); console.log('stats', st);
 assert.equal((await j('nope')).status, 404);
 console.log('API tests passed against', BASE);
+
+// Feedback tickets
+{
+  const ctx = { version: 'test', mode: 'easy', seed: 1, ua: 'api-test', screen: '1x1' };
+  assert.equal((await j('feedback', { type: 'nope', message: 'hello there' })).status, 400, 'bad type');
+  assert.equal((await j('feedback', { type: 'bug', message: 'hi' })).status, 400, 'too short');
+  assert.equal((await j('feedback', { type: 'bug', message: 'x'.repeat(1001) })).status, 400, 'too long');
+  assert.equal((await j('feedback', { type: 'bug', message: 'valid message', contact: 'not-an-email' })).status, 400, 'bad email');
+  const hp = await j('feedback', { type: 'bug', message: 'spam spam spam', website: 'http://spam' });
+  assert.ok(hp.ok && hp.id === null, 'honeypot silently dropped');
+  const fb = await j('feedback', { type: 'idea', message: 'API TEST TICKET — delete me', contact: 'test@example.com', context: ctx });
+  assert.ok(fb.ok && fb.id > 0, JSON.stringify(fb));
+  console.log('feedback ticket id', fb.id);
+}
+console.log('feedback tests passed');

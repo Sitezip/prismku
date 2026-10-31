@@ -11,3 +11,4 @@ Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 - Spoiler-free emoji share grid.
 - D1-backed nicknames, server-verified scores, daily/weekly/all-time leaderboards, achievements, community highlights.
 - PWA manifest, offline service worker, OG card, SEO metadata, version archive.
+- In-game feedback & bug reports (💬 button, footer link, win dialog): bug / idea / other, optional email, auto-attached context, stored in D1 (`feedback` table) with rate limiting and a honeypot.

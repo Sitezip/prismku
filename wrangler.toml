@@ -3,6 +3,7 @@ account_id = "c8b13d50e782530c28d6789c9990341b"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
+preview_urls = false
 routes = [
   { pattern = "prismku.com", custom_domain = true },
   { pattern = "www.prismku.com", custom_domain = true },
