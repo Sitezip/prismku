@@ -94,7 +94,8 @@ body.cb .cell.filled svg{opacity:1}
 .dlg .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .btn{border:0;border-radius:12px;padding:10px 14px;font-weight:600;background:var(--panel);border:1px solid var(--line)}
 .btn.primary{background:linear-gradient(135deg,var(--c6),var(--c8));border:0;color:#fff}
-.btn.x{position:sticky;float:right;top:0}
+.btn.x{position:absolute;top:12px;right:12px;z-index:5;min-width:44px;min-height:44px;padding:8px 12px;touch-action:manipulation}
+.dlg-body{position:relative}.dlg h3{padding-right:56px}
 .big{font-size:34px;font-weight:800;text-align:center;margin:6px 0}
 .kv{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;font-size:12px;color:var(--muted)}
 .kv b{display:block;color:var(--text);font-size:16px}
@@ -129,3 +130,14 @@ input[type=email]{width:100%;padding:10px 12px;border-radius:12px;border:1px sol
 .fb-ctx{font-size:12px;color:var(--muted);margin-top:8px;word-break:break-word}
 .hp{position:absolute!important;left:-9999px!important;width:1px;height:1px;overflow:hidden}
 @media (max-width:420px){.top{padding:10px 8px}.top-actions{gap:4px}.icon-btn{width:33px;height:33px;font-size:15px}.brand img{width:34px;height:34px}.brand-text b{font-size:20px}}
+
+/* fresh board layer per size: keep its painting isolated (issue #2) */
+.board{isolation:isolate;contain:layout paint}
+/* notes / pencil marks */
+.controls button.on{border-color:var(--accent);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent)}
+.notes{position:absolute;inset:12%;display:grid;grid-template-columns:repeat(var(--k),1fr);gap:8%;place-items:center;pointer-events:none;z-index:1}
+.notes i{width:70%;aspect-ratio:1;border-radius:50%;background:var(--col);box-shadow:0 0 4px var(--col)}
+.notes i.off{background:none;box-shadow:none}
+.cell.noted::before{opacity:.35}
+body.notes-on .swatch{border-style:dashed}
+@media (max-width:420px){.controls{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;width:var(--board)}.controls button{padding:7px 2px;font-size:12px;white-space:nowrap}}

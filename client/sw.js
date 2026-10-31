@@ -1,5 +1,5 @@
 // Minimal network-first service worker: offline play for the current release only.
-const CACHE = 'prismku-2026-10-30';
+const CACHE = 'prismku-2026-10-31';
 const CORE = ['/', '/app.js', '/puzzle.js', '/config.js', '/styles.css', '/img/logo.svg', '/manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

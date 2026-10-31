@@ -256,13 +256,13 @@ async function leaderboard(env, url) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('day') || '') ? url.searchParams.get('day') : utcDay();
     rows = await env.DB.prepare(`${base} WHERE s.daily_id = ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(`${day}:${mode}`).all();
   } else if (scope === 'week') {
-    rows = await env.DB.prepare(`${base} WHERE s.mode = ? AND s.created_at > ? GROUP BY s.player_id ORDER BY score DESC LIMIT 25`).bind(mode, Date.now() - 7 * 86400000).all();
+    rows = await env.DB.prepare(`${base} WHERE s.mode = ? AND s.created_at > ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode, Date.now() - 7 * 86400000).all();
   } else {
-    rows = await env.DB.prepare(`${base} WHERE s.mode = ? GROUP BY s.player_id ORDER BY score DESC LIMIT 25`).bind(mode).all();
+    rows = await env.DB.prepare(`${base} WHERE s.mode = ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode).all();
   }
   const me = url.searchParams.get('me');
   return json({ ok: true, mode, scope, entries: rows.results.map((r, i) => ({ rank: i + 1, nickname: r.nickname, score: r.score, timeMs: r.time_ms, hints: r.hints, me: !!me && r.player_id === me })) },
-    200, { 'cache-control': 'public, max-age=15' });
+    200, { 'cache-control': 'no-store' }); // fresh after a score submit (issue #1)
 }
 
 async function me(env, url) {

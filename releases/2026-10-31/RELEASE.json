@@ -1,0 +1,11 @@
+{
+  "day": "2026-10-31",
+  "title": "Pencil Marks",
+  "notes": [
+    "New ✏️ Notes mode for color pencil marks",
+    "Leaderboard fixes: reliable close button, no stale tabs, fresh after submit",
+    "Fixed stale tiles when switching board sizes",
+    "Controls fit one row on small phones"
+  ],
+  "frozenAt": "2026-10-31T18:09:01.982Z"
+}

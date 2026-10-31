@@ -74,6 +74,7 @@ function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.c
 let G = null;          // current game
 let sel = -1;          // selected cell
 let brush = 0;         // armed color
+let notesOn = false;   // pencil-mark mode
 let serverDay = utcDay();
 let tick = null;
 const dlgState = {}; // UI state for the open dialog (kept off DOM attributes so closest() never matches the dialog)
@@ -89,7 +90,7 @@ function newGame(play, mode, seed) {
   else {
     const p = generate(mode, seed);
     G = { play, mode, seed: p.seed, day, number: dayNumber(day), puzzle: p.puzzle, solution: p.solution, grid: p.puzzle.slice(),
-      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], result: null };
+      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], result: null };
   }
   G.key = key; G.startedAt = performance.now();
   sel = -1; brush = 0;
@@ -97,7 +98,7 @@ function newGame(play, mode, seed) {
   render(true); startTimer();
   if (G.done) showDoneState();
 }
-function restore(s) { const p = generate(s.mode, s.seed); return { ...s, puzzle: p.puzzle, solution: p.solution }; }
+function restore(s) { const p = generate(s.mode, s.seed); return { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution }; }
 function persist() {
   if (!G) return;
   const { puzzle, solution, startedAt, key, ...rest } = G;
@@ -118,9 +119,13 @@ window.addEventListener('pagehide', persist);
 
 // ---------- rendering ----------
 function render(full) {
-  const m = MODES[G.mode], n = m.size, board = $('#board');
+  const m = MODES[G.mode], n = m.size;
+  let board = $('#board');
   if (full) {
-    board.innerHTML = '';
+    // Swap in a brand-new board element: reusing the old one could leave stale composited tiles
+    // from the previous size painted over some rows until the next focus/hover repaint (issue #2).
+    const fresh = board.cloneNode(false); board.replaceWith(fresh); board = fresh;
+    if (document.activeElement && document.activeElement.closest?.('.board')) document.activeElement.blur();
     const gap = n >= 9 ? 3 : n >= 6 ? 4 : 6;
     board.style.setProperty('--gap', gap + 'px'); board.style.setProperty('--n', n);
     board.style.setProperty('--cr', (n >= 9 ? 6 : n >= 6 ? 9 : 12) + 'px');
@@ -157,7 +162,9 @@ function render(full) {
     const v = G.grid[i], given = !!G.puzzle[i];
     c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '');
     if (v) c.style.setProperty('--col', `var(--c${v})`); else c.style.removeProperty('--col');
-    c.innerHTML = v ? svg(v) : '';
+    const nm = !v && G.notes ? G.notes[i] : 0;
+    c.classList.toggle('noted', !!nm);
+    c.innerHTML = v ? svg(v) : nm ? noteDots(nm, n) : '';
     const r = Math.floor(i / n) + 1, col = (i % n) + 1;
     c.setAttribute('aria-label', `Row ${r} column ${col}: ${v ? COLOR_NAMES[v] : 'empty'}${given ? ' (fixed)' : ''}`);
   });
@@ -169,7 +176,26 @@ function render(full) {
   $('#hud-moves').textContent = G.moves; $('#hud-hints').textContent = G.hints; $('#hud-mist').textContent = G.mistakes;
   $('#hud-time').textContent = fmt(elapsed());
   $('#btn-undo').disabled = !G.hist.length || G.done;
-  $('#btn-hint').disabled = $('#btn-erase').disabled = G.done;
+  $('#btn-hint').disabled = $('#btn-erase').disabled = $('#btn-notes').disabled = G.done;
+  $('#btn-notes').setAttribute('aria-pressed', notesOn); $('#btn-notes').classList.toggle('on', notesOn);
+  document.body.classList.toggle('notes-on', notesOn);
+}
+
+function noteDots(mask, n) {
+  const k = n <= 4 ? 2 : 3; let h = `<span class="notes" style="--k:${k}">`;
+  for (let v = 1; v <= n; v++) h += mask & (1 << v) ? `<i style="--col:var(--c${v})"></i>` : '<i class="off"></i>';
+  return h + '</span>';
+}
+
+// Pencil marks: toggle a tiny color dot in an empty tile. Not scored, not in undo history.
+function toggleNote(i, v) {
+  if (G.done || i < 0 || G.puzzle[i] || G.grid[i]) return;
+  G.notes[i] ^= (1 << v); tone(SCALE[v] * 2, 0.06, 'sine', 0.05); render(false); persist();
+}
+function clearPeerNotes(i, v) {
+  if (!G.notes) return; const bit = 1 << v;
+  for (const p of peers(G.mode)[i]) G.notes[p] &= ~bit;
+  G.notes[i] = 0;
 }
 
 function place(i, v) {
@@ -179,7 +205,7 @@ function place(i, v) {
   G.hist.push({ i, prev, places: G.places[i], hinted: G.hinted[i] });
   G.grid[i] = v; G.moves++;
   if (v) {
-    G.places[i]++;
+    G.places[i]++; clearPeerNotes(i, v);
     const bad = conflicts(G.grid, G.mode);
     if (bad.has(i)) { G.mistakes++; sfx.clash(); if (navigator.vibrate) navigator.vibrate(40); } else sfx.place(v);
   } else sfx.erase();
@@ -209,7 +235,7 @@ function hint() {
   }
   if (target < 0) return;
   G.hist.push({ i: target, prev: G.grid[target], places: G.places[target], hinted: G.hinted[target] });
-  G.grid[target] = G.solution[target]; G.hinted[target] = true; G.hints++; G.moves++; sel = target;
+  G.grid[target] = G.solution[target]; clearPeerNotes(target, G.solution[target]); G.hinted[target] = true; G.hints++; G.moves++; sel = target;
   sfx.hint(); render(false); persist();
   toast(`Hint: that tile is ${COLOR_NAMES[G.solution[target]]} (+15s)`);
   if (isSolved(G.grid, G.puzzle, G.mode)) win();
@@ -218,7 +244,7 @@ function hint() {
 function restart() {
   if (G.done && G.play === 'daily') return toast('Today’s daily is solved — try Free play!');
   if (!confirm('Restart this puzzle? Your timer keeps running.')) return;
-  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.hist = []; sel = -1;
+  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; sel = -1;
   render(false); persist();
 }
 
@@ -337,19 +363,25 @@ async function share() {
 }
 
 // ---------- dialogs ----------
-function openDlg(html) { const d = $('#dlg'); $('#dlg-body').innerHTML = html; if (!d.open) d.showModal(); }
-function closeDlg() { $('#dlg').close(); }
+function openDlg(html) { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; $('#dlg-body').innerHTML = html; if (!d.open) { try { d.showModal(); } catch { d.setAttribute('open', ''); } } }
+function closeDlg() { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; try { d.close(); } catch {} d.removeAttribute('open'); }
+// Close buttons are handled in the capture phase so no other dialog handler (or a pending async render) can swallow the tap (issue #1).
+document.addEventListener('click', e => { if (e.target.closest?.('#dlg [data-act="close"]')) { e.preventDefault(); e.stopPropagation(); closeDlg(); } }, true);
 
-async function showLeaderboard(mode = G.mode, scope = 'daily') {
+async function showLeaderboard(mode = G.mode, scope = 'daily', day = serverDay) {
+  const dayLabel = day === serverDay ? 'Today' : day.slice(5).replace('-', '/');
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>🏆 Leaderboards</h3>
-    <div class="seg" style="margin-bottom:8px">${['daily', 'week', 'all'].map(s => `<button data-lbscope="${s}" class="${s === scope ? 'on' : ''}">${{ daily: 'Today', week: 'This week', all: 'All time' }[s]}</button>`).join('')}</div>
+    <div class="seg" style="margin-bottom:8px">${['daily', 'week', 'all'].map(s => `<button data-lbscope="${s}" class="${s === scope ? 'on' : ''}">${{ daily: dayLabel, week: 'This week', all: 'All time' }[s]}</button>`).join('')}</div>
     <div class="seg" style="margin-bottom:10px">${MODE_KEYS.map(k => `<button data-lbmode="${k}" class="${k === mode ? 'on' : ''}">${MODES[k].label}</button>`).join('')}</div>
     <div id="lb-body"><p class="tip">Loading…</p></div>`);
-  dlgState.lbmode = mode; dlgState.lbscope = scope;
-  const r = await api(`leaderboard?mode=${mode}&scope=${scope}&me=${player.id}`);
-  const body = $('#lb-body'); if (!body) return;
+  dlgState.lbmode = mode; dlgState.lbscope = scope; dlgState.lbday = day;
+  const token = dlgState.token;
+  const r = await api(`leaderboard?mode=${mode}&scope=${scope}&me=${player.id}${scope === 'daily' ? `&day=${day}` : ''}`);
+  const body = $('#lb-body');
+  // Ignore stale responses: the player switched tab/mode or closed the dialog while this was loading.
+  if (!body || token !== dlgState.token || !$('#dlg').open) return;
   if (!r.ok) { body.innerHTML = '<p class="tip">Leaderboard unavailable right now.</p>'; return; }
-  body.innerHTML = r.entries.length ? `<table class="lb"><tbody>${r.entries.map(e => `<tr class="${e.me ? 'me' : ''}"><td class="n">${e.rank}</td><td>${esc(e.nickname)}</td><td class="s">${fmt(e.timeMs)}</td><td class="s"><b>${e.score}</b></td></tr>`).join('')}</tbody></table>`
+  body.innerHTML = r.entries.length ? `<table class="lb"><tbody>${r.entries.map(e => `<tr class="${e.me ? 'me' : ''}"><td class="n">${e.rank}</td><td>${esc(e.nickname)}${e.hints ? ' <small title="hints used">💡' + e.hints + '</small>' : ''}</td><td class="s">${fmt(e.timeMs)}</td><td class="s"><b>${e.score}</b></td></tr>`).join('')}</tbody></table>`
     : '<p class="tip">No scores yet — be the first to light it up!</p>';
 }
 
@@ -371,7 +403,8 @@ async function showMe() {
 function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
-    <p>👉 Tap a tile, then tap a color. Or tap a color first to “paint” several tiles.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint.</p>
+    <p>👉 Tap a tile, then tap a color. Or tap a color first to “paint” several tiles.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes.</p>
+    <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
     <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
@@ -422,17 +455,18 @@ async function loadCommunity() {
 // ---------- events ----------
 function selectCell(i) {
   if (G.done) return;
-  if (brush && !G.puzzle[i]) { place(i, G.grid[i] === brush ? 0 : brush); sel = i; render(false); return; }
+  if (brush && !G.puzzle[i]) { if (notesOn && !G.grid[i]) toggleNote(i, brush); else place(i, G.grid[i] === brush ? 0 : brush); sel = i; render(false); return; }
   sel = sel === i ? -1 : i; render(false);
 }
-$('#board').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) selectCell(+c.dataset.i); });
+$('#board-wrap').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) selectCell(+c.dataset.i); });
 $('#palette').addEventListener('click', e => {
   const s = e.target.closest('.swatch'); if (!s || G.done) return; const v = +s.dataset.v;
-  if (sel >= 0 && !G.puzzle[sel]) { place(sel, G.grid[sel] === v ? 0 : v); }
+  if (sel >= 0 && !G.puzzle[sel]) { if (notesOn && !G.grid[sel]) toggleNote(sel, v); else place(sel, G.grid[sel] === v ? 0 : v); }
   else { brush = brush === v ? 0 : v; render(false); if (brush) toast(`Painting ${COLOR_NAMES[v]} — tap tiles`, 1500); }
 });
+$('#btn-notes').onclick = () => { notesOn = !notesOn; render(false); toast(notesOn ? '✏️ Notes on — colors become pencil dots' : 'Notes off', 1500); };
 $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').onclick = restart;
-$('#btn-erase').onclick = () => { if (sel >= 0) place(sel, 0); else toast('Select a tile to erase'); };
+$('#btn-erase').onclick = () => { if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
 $('#btn-new').onclick = () => { store.del(progressKey('free', G.mode)); newGame('free', G.mode, randomSeed()); };
 $('#btn-board').onclick = () => showLeaderboard();
 $('#btn-me').onclick = showMe; $('#btn-help').onclick = showHelp; $('#btn-feedback').onclick = () => showFeedback();
@@ -455,14 +489,13 @@ $('#dlg').addEventListener('click', async e => {
   const fbt = e.target.closest('[data-fbtype]');
   if (fbt) { dlgState.fbtype = fbt.dataset.fbtype; document.querySelectorAll('[data-fbtype]').forEach(b => { b.classList.toggle('on', b === fbt); b.setAttribute('aria-checked', b === fbt); }); return; }
   const lbm = e.target.closest('[data-lbmode]'), lbs = e.target.closest('[data-lbscope]'), th = e.target.closest('[data-theme]');
-  if (lbm) return showLeaderboard(lbm.dataset.lbmode, dlgState.lbscope);
-  if (lbs) return showLeaderboard(dlgState.lbmode, lbs.dataset.lbscope);
+  if (lbm) return showLeaderboard(lbm.dataset.lbmode, dlgState.lbscope, dlgState.lbday);
+  if (lbs) return showLeaderboard(dlgState.lbmode, lbs.dataset.lbscope, dlgState.lbday);
   if (th) { if (th.dataset.pro && CONFIG.pro.enabled && !store.get('pro', false, 'pk.')) { if (CONFIG.pro.checkoutUrl) location.href = CONFIG.pro.checkoutUrl; return; } settings.theme = th.dataset.theme; saveSettings(); applySettings(); return showMe(); }
-  if (a === 'close') closeDlg();
-  if (a === 'share') share();
+    if (a === 'share') share();
   if (a === 'feedback') showFeedback();
   if (a === 'fb-send') sendFeedback();
-  if (a === 'lb') showLeaderboard(G.mode, G.play === 'daily' ? 'daily' : 'all');
+  if (a === 'lb') showLeaderboard(G.mode, G.play === 'daily' ? 'daily' : 'all', G.play === 'daily' ? G.day : serverDay);
   if (a === 'next') { closeDlg(); if (G.play === 'daily') startMode('free', G.mode); else $('#btn-new').click(); }
   if (a === 'save-nick') {
     const nick = $('#nick').value.trim(); if (!nick) return;
@@ -482,7 +515,9 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); if (sel < 0) sel = 0;
     else { const r = Math.floor(sel / n), c = sel % n; const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k]; sel = ((r + d[0] + n) % n) * n + ((c + d[1] + n) % n); }
     render(false);
-  } else if (/^[1-9]$/.test(k) && +k <= n) { if (sel >= 0) place(sel, +k); }
+  } else if (/^[1-9]$/.test(k) && +k <= n) { if (sel >= 0) { if ((notesOn || e.shiftKey) && !G.grid[sel]) toggleNote(sel, +k); else place(sel, +k); } }
+  else if (/^Digit[1-9]$/.test(e.code) && e.shiftKey && +e.code.slice(5) <= n) { if (sel >= 0 && !G.grid[sel]) toggleNote(sel, +e.code.slice(5)); }
+  else if (k.toLowerCase() === 'n') $('#btn-notes').click();
   else if (k === 'Backspace' || k === 'Delete' || k === '0') { if (sel >= 0) place(sel, 0); }
   else if (k.toLowerCase() === 'z') undo();
   else if (k.toLowerCase() === 'h') hint();
