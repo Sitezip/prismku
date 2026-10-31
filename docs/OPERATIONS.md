@@ -12,7 +12,7 @@
 4. Add a CHANGELOG entry, then freeze: `node scripts/release.mjs YYYY-MM-DD "Title" "note|note"`.
 5. Test: `npm test`, local `wrangler dev`, `test/api.test.mjs`, `test/ui.test.mjs`.
 6. Deploy (one of):
-   - **Git push to `main`** (once Workers Builds is connected) → `wrangler deploy` using `wrangler.toml` (real static assets).
+   - **Git push to `main`** (Workers Builds: `npm test` → `npx wrangler deploy`) → `wrangler deploy` using `wrangler.toml` (real static assets).
    - **API-only** (agent connector, no token): `node scripts/build.mjs && node scripts/deploy-mcp.mjs`, then run the
      contents of `build/deploy-code.js` with the Cloudflare connector's `execute` tool. This "embedded" mode bundles
      `dist/` into the Worker (`src/embedded.js`) because the assets-upload JWT endpoint is not reachable from the connector.
