@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-01",
+  "title": "Fair Clock",
+  "notes": [
+    "Clock pauses (and the board blurs) while any dialog is open, so first-time players read the rules at 0:00",
+    "Fixed uneven rows on Easy that pushed the box divider through tiles",
+    "New How to play guide at /how-to-play/"
+  ],
+  "frozenAt": "2026-11-01T19:11:39.984Z"
+}

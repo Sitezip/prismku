@@ -95,7 +95,7 @@ function newGame(play, mode, seed) {
   G.key = key; G.startedAt = performance.now();
   sel = -1; brush = 0;
   settings.play = play; settings.mode = mode; saveSettings();
-  render(true); startTimer();
+  render(true); startTimer(); updatePaused();
   if (G.done) showDoneState();
 }
 function restore(s) { const p = generate(s.mode, s.seed); return { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution }; }
@@ -105,16 +105,25 @@ function persist() {
   rest.elapsed = elapsed(); rest.hist = rest.hist.slice(-200);
   store.set(G.key, rest);
 }
-function elapsed() { return G.done ? G.elapsed : G.elapsed + (document.hidden ? 0 : performance.now() - G.startedAt); }
+// The clock only runs while nothing is "holding" it: an open dialog (help, leaderboards, feedback…) or a hidden tab.
+// First-time players read the how-to with the timer paused and the board veiled (ticket #3).
+const holds = new Set(document.hidden ? ['hidden'] : []);
+const running = () => holds.size === 0;
+function setHold(reason, on) {
+  if (on === holds.has(reason)) return;
+  const was = running();
+  if (G && !G.done && was) G.elapsed += performance.now() - G.startedAt;
+  on ? holds.add(reason) : holds.delete(reason);
+  if (G) G.startedAt = performance.now();
+  if (was !== running()) updatePaused();
+}
+function updatePaused() { document.body.classList.toggle('paused', !!G && !G.done && !running()); if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); }
+function elapsed() { return G.done ? G.elapsed : G.elapsed + (running() ? performance.now() - G.startedAt : 0); }
 function startTimer() {
   clearInterval(tick);
   tick = setInterval(() => { if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); }, 250);
 }
-document.addEventListener('visibilitychange', () => {
-  if (!G || G.done) return;
-  if (document.hidden) { G.elapsed += performance.now() - G.startedAt; persist(); }
-  else G.startedAt = performance.now();
-});
+document.addEventListener('visibilitychange', () => { setHold('hidden', document.hidden); if (document.hidden) persist(); });
 window.addEventListener('pagehide', persist);
 
 // ---------- rendering ----------
@@ -129,7 +138,9 @@ function render(full) {
     const gap = n >= 9 ? 3 : n >= 6 ? 4 : 6;
     board.style.setProperty('--gap', gap + 'px'); board.style.setProperty('--n', n);
     board.style.setProperty('--cr', (n >= 9 ? 6 : n >= 6 ? 9 : 12) + 'px');
-    board.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    // Explicit equal rows too: auto rows could size unevenly (a short first row on Easy), so the box
+    // divider no longer ran through the gap between rows (ticket #2).
+    board.style.gridTemplateColumns = board.style.gridTemplateRows = `repeat(${n}, minmax(0, 1fr))`;
     board.classList.remove('win');
     for (let i = 0; i < n * n; i++) {
       const b = document.createElement('button');
@@ -363,8 +374,9 @@ async function share() {
 }
 
 // ---------- dialogs ----------
-function openDlg(html) { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; $('#dlg-body').innerHTML = html; if (!d.open) { try { d.showModal(); } catch { d.setAttribute('open', ''); } } }
-function closeDlg() { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; try { d.close(); } catch {} d.removeAttribute('open'); }
+function openDlg(html) { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; $('#dlg-body').innerHTML = html; if (!d.open) { try { d.showModal(); } catch { d.setAttribute('open', ''); } } setHold('dlg', true); }
+function closeDlg() { const d = $('#dlg'); dlgState.token = (dlgState.token || 0) + 1; try { d.close(); } catch {} d.removeAttribute('open'); setHold('dlg', false); }
+$('#dlg').addEventListener('close', () => setHold('dlg', false)); // Esc / form close
 // Close buttons are handled in the capture phase so no other dialog handler (or a pending async render) can swallow the tap (issue #1).
 document.addEventListener('click', e => { if (e.target.closest?.('#dlg [data-act="close"]')) { e.preventDefault(); e.stopPropagation(); closeDlg(); } }, true);
 

@@ -4,6 +4,9 @@ const SITE = 'https://prismku.com';
 rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist', { recursive: true });
 cpSync('client', 'dist', { recursive: true });
+// Evergreen SEO pages (not frozen into releases): pages/<slug>.html → /<slug>/
+const pages = existsSync('pages') ? readdirSync('pages').filter(f => f.endsWith('.html')).map(f => f.slice(0, -5)) : [];
+for (const slug of pages) { mkdirSync(`dist/${slug}`, { recursive: true }); cpSync(`pages/${slug}.html`, `dist/${slug}/index.html`); }
 const releases = existsSync('releases') ? readdirSync('releases').filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse() : [];
 const meta = releases.map(d => JSON.parse(readFileSync(`releases/${d}/RELEASE.json`, 'utf8')));
 for (const d of releases) cpSync(`releases/${d}`, `dist/v/${d}`, { recursive: true, filter: s => !s.endsWith('RELEASE.json') });
@@ -19,5 +22,5 @@ h1{background:linear-gradient(90deg,#ff3b47,#ff8c1a,#ffd60a,#2ecc71,#2f7bff,#9b5
 <body><main><h1>Prismku version history</h1><p>Prismku evolves every day. Each edition is frozen and still playable here. <a href="/">← Play the latest</a></p>
 ${meta.map((m, i) => `<div class="card"><h2><a href="/v/${m.day}/">${esc(m.day)} — ${esc(m.title)}</a>${i === 0 ? '<span class="tag">latest</span>' : ''}</h2><ul>${m.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>`).join('\n')}
 </main></body></html>`);
-writeFileSync('dist/sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n<url><loc>${SITE}/versions/</loc><changefreq>daily</changefreq></url>\n${releases.map(d => `<url><loc>${SITE}/v/${d}/</loc></url>`).join('\n')}\n</urlset>\n`);
+writeFileSync('dist/sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n${pages.map(p => `<url><loc>${SITE}/${p}/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>\n`).join('')}<url><loc>${SITE}/versions/</loc><changefreq>daily</changefreq></url>\n${releases.map(d => `<url><loc>${SITE}/v/${d}/</loc></url>`).join('\n')}\n</urlset>\n`);
 console.log(`built dist/ with ${releases.length} release(s): ${releases.join(', ')}`);

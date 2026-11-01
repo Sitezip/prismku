@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-01 — "Fair Clock"
+- The clock now pauses whenever a dialog is open (how-to, leaderboards, profile, feedback) or the tab is hidden, and the board blurs while paused so it can't be studied off the clock. First-time players read the rules at 0:00 (ticket #3).
+- Fixed (ticket #2): on Easy the first row could render shorter than the others, so the box divider cut through tiles instead of the gap. Rows are now always equal and dividers sit exactly between boxes on every size.
+- New "How to play Rainbow Sudoku" guide at /how-to-play/ with rules, strategy tips and FAQ markup for search, linked from the footer and sitemap.
+
 ## 2026-10-31 — "Pencil Marks"
 - New ✏️ Notes mode: drop tiny color dots in empty tiles to track candidates; placing a color wipes that dot from its row, column and box. Keyboard: N toggles, Shift+number marks. Notes are saved with your progress.
 - Fixed (issue #2): switching board sizes could leave stale tiles painted over some rows until the next tap; each size now gets a fresh, paint-isolated board.

@@ -141,3 +141,8 @@ input[type=email]{width:100%;padding:10px 12px;border-radius:12px;border:1px sol
 .cell.noted::before{opacity:.35}
 body.notes-on .swatch{border-style:dashed}
 @media (max-width:420px){.controls{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;width:var(--board)}.controls button{padding:7px 2px;font-size:12px;white-space:nowrap}}
+/* paused clock (any dialog open / tab hidden): veil the board so it can't be studied off the clock */
+.board{transition:filter .25s}
+body.paused .board{filter:blur(10px) saturate(.6)}
+body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
+@keyframes blink{50%{opacity:.35}}
