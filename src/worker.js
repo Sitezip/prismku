@@ -1,5 +1,6 @@
 // Prismku (Rainbow Sudoku) — Cloudflare Worker: JSON API on D1 + static SPA assets.
 import { MODES, generate, isSolved, stringToGrid, gridToString, dailySeed, computeScore } from '../client/puzzle.js';
+import { checkClock, minSolveMs } from './clock.js';
 
 const LAUNCH_DAY = '2026-10-31';
 const NICK_RE = /^[A-Za-z0-9 _.\-]{2,16}$/;
@@ -148,19 +149,23 @@ async function submitScore(env, request) {
   const { puzzle } = generate(b.mode, seed);
   if (!isSolved(grid, puzzle, b.mode)) return err('grid is not a valid solution');
   const empty = puzzle.filter(v => !v).length;
-  const timeMs = Math.round(Number(b.timeMs)), moves = Math.round(Number(b.moves));
+  const claimedMs = Math.round(Number(b.timeMs)), moves = Math.round(Number(b.moves));
   const hints = Math.round(Number(b.hints) || 0), mistakes = Math.round(Number(b.mistakes) || 0);
-  if (!(timeMs >= mode.minMs && timeMs <= 6 * 3600 * 1000)) return err('time out of range');
+  const floorMs = minSolveMs(b.mode, empty);
+  if (!(claimedMs >= floorMs && claimedMs <= 6 * 3600 * 1000)) return err('time out of range');
   if (!(moves >= empty - hints && moves <= 5000)) return err('moves out of range');
   if (!(hints >= 0 && hints <= empty) || !(mistakes >= 0 && mistakes <= 2000)) return err('stats out of range');
   const version = String(b.version || 'unknown').slice(0, 20);
-  const score = computeScore(b.mode, timeMs, hints, mistakes);
   const now = Date.now(), day = utcDay();
+  const play = await env.DB.prepare('SELECT started_at, finished_at FROM plays WHERE player_id = ? AND mode = ? AND seed = ?').bind(player.id, b.mode, seed).first();
+  const clock = checkClock({ claimedMs, startedAt: play?.started_at, finishedAt: play?.finished_at, now, floorMs });
+  const timeMs = Math.min(clock.timeMs, 6 * 3600 * 1000), ranked = clock.ranked;
+  const score = computeScore(b.mode, timeMs, hints, mistakes);
 
   let ins;
   try {
-    ins = await env.DB.prepare(`INSERT INTO scores (player_id, mode, size, seed, daily_id, time_ms, moves, hints, mistakes, score, version, day, created_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`).bind(player.id, b.mode, mode.size, seed, dailyId, timeMs, moves, hints, mistakes, score, version, day, now).first();
+    ins = await env.DB.prepare(`INSERT INTO scores (player_id, mode, size, seed, daily_id, time_ms, moves, hints, mistakes, score, version, day, created_at, ranked, client_ms, check_note)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`).bind(player.id, b.mode, mode.size, seed, dailyId, timeMs, moves, hints, mistakes, score, version, day, now, ranked, claimedMs, clock.note).first();
   } catch (e) {
     if (String(e).includes('UNIQUE')) return err('daily already submitted', 409);
     throw e;
@@ -176,8 +181,8 @@ async function submitScore(env, request) {
   want(!!dailyId, 'daily_solver');
   want(b.mode === 'expert', 'expert_solve');
   want((b.mode === 'hard' || b.mode === 'expert') && !hints && !mistakes, 'flawless');
-  want(b.mode === 'easy' && timeMs < 10000 && !hints, 'speed_easy');
-  want(b.mode === 'hard' && timeMs < 60000 && !hints, 'speed_hard');
+  want(ranked && b.mode === 'easy' && timeMs < 10000 && !hints, 'speed_easy');
+  want(ranked && b.mode === 'hard' && timeMs < 60000 && !hints, 'speed_hard');
   want(games >= 10, 'ten_games');
   want(games >= 50, 'fifty_games');
   let streak = 0;
@@ -189,8 +194,8 @@ async function submitScore(env, request) {
     if (streak > player.best_streak) await env.DB.prepare('UPDATE players SET best_streak = ? WHERE id = ?').bind(streak, player.id).run();
   }
   let dailyRank = null;
-  if (dailyId) {
-    const r = await env.DB.prepare('SELECT COUNT(*) c FROM scores WHERE daily_id = ? AND score > ?').bind(dailyId, score).first();
+  if (dailyId && ranked) {
+    const r = await env.DB.prepare('SELECT COUNT(*) c FROM scores WHERE daily_id = ? AND ranked = 1 AND score > ?').bind(dailyId, score).first();
     dailyRank = r.c + 1;
     want(dailyRank === 1, 'daily_top');
   }
@@ -202,16 +207,39 @@ async function submitScore(env, request) {
   }
   const hl = [];
   for (const c of newly) if (['expert_solve', 'flawless', 'streak_7', 'fifty_games', 'daily_top', 'speed_hard'].includes(c)) hl.push(['achievement', `${player.nickname} earned “${ACH[c].split(' — ')[0]}”`]);
-  const best = await env.DB.prepare('SELECT MAX(score) m FROM scores WHERE mode = ? AND id != ?').bind(b.mode, ins.id).first();
-  const allTimeRecord = !best.m || score > best.m;
+  const best = await env.DB.prepare('SELECT MAX(score) m FROM scores WHERE mode = ? AND ranked = 1 AND id != ?').bind(b.mode, ins.id).first();
+  const allTimeRecord = !!ranked && (!best.m || score > best.m);
   if (allTimeRecord) hl.push(['record', `${player.nickname} set a new ${mode.label} record: ${score} pts`]);
   if (hl.length) {
     const stmt = env.DB.prepare('INSERT INTO highlights (player_id, nickname, kind, message, created_at) VALUES (?,?,?,?,?)');
     await env.DB.batch(hl.map(([k, m]) => stmt.bind(player.id, player.nickname, k, m, now)));
   }
-  const pb = await env.DB.prepare('SELECT MAX(score) m FROM scores WHERE player_id = ? AND mode = ? AND id != ?').bind(player.id, b.mode, ins.id).first();
-  return json({ ok: true, id: ins.id, score, dailyRank, streak, personalBest: !pb.m || score > pb.m, allTimeRecord,
+  const pb = await env.DB.prepare('SELECT MAX(score) m FROM scores WHERE player_id = ? AND mode = ? AND ranked = 1 AND id != ?').bind(player.id, b.mode, ins.id).first();
+  return json({ ok: true, id: ins.id, score, timeMs, ranked: !!ranked, clock: clock.note, dailyRank, streak, personalBest: !!ranked && (!pb.m || score > pb.m), allTimeRecord,
     achievements: newly.map(c => ({ code: c, title: ACH[c] })) });
+}
+
+// POST /api/play/start {playerId, mode, seed} — the client calls this the moment a board is first shown.
+// POST /api/play/finish {playerId, mode, seed, grid} — on solve; the grid must be a real solution, so the
+// finish stamp can't be taken before the puzzle is actually solved. First stamp wins (INSERT/UPDATE only if unset).
+async function playStamp(env, request, kind) {
+  if (!await rateLimit(env, request, 'play', 60)) return err('slow down', 429);
+  const b = await readJson(request);
+  if (!validId(b.playerId)) return err('bad id');
+  const mode = MODES[b.mode];
+  if (!mode) return err('bad mode');
+  const seed = Number(b.seed);
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) return err('bad seed');
+  const now = Date.now();
+  if (kind === 'start') {
+    await env.DB.prepare('INSERT OR IGNORE INTO plays (player_id, mode, seed, started_at) VALUES (?,?,?,?)').bind(b.playerId, b.mode, seed, now).run();
+  } else {
+    if (typeof b.grid !== 'string' || b.grid.length !== mode.size * mode.size) return err('bad grid');
+    const { puzzle } = generate(b.mode, seed);
+    if (!isSolved(stringToGrid(b.grid), puzzle, b.mode)) return err('grid is not a valid solution');
+    await env.DB.prepare('UPDATE plays SET finished_at = ? WHERE player_id = ? AND mode = ? AND seed = ? AND finished_at IS NULL').bind(now, b.playerId, b.mode, seed).run();
+  }
+  return json({ ok: true });
 }
 
 const FEEDBACK_TYPES = ['bug', 'idea', 'other'];
@@ -254,11 +282,11 @@ async function leaderboard(env, url) {
   const base = `SELECT p.nickname, MAX(s.score) score, s.time_ms, s.hints, s.player_id FROM scores s JOIN players p ON p.id = s.player_id`;
   if (scope === 'daily') {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('day') || '') ? url.searchParams.get('day') : utcDay();
-    rows = await env.DB.prepare(`${base} WHERE s.daily_id = ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(`${day}:${mode}`).all();
+    rows = await env.DB.prepare(`${base} WHERE s.daily_id = ? AND s.ranked = 1 GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(`${day}:${mode}`).all();
   } else if (scope === 'week') {
-    rows = await env.DB.prepare(`${base} WHERE s.mode = ? AND s.created_at > ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode, Date.now() - 7 * 86400000).all();
+    rows = await env.DB.prepare(`${base} WHERE s.mode = ? AND s.ranked = 1 AND s.created_at > ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode, Date.now() - 7 * 86400000).all();
   } else {
-    rows = await env.DB.prepare(`${base} WHERE s.mode = ? GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode).all();
+    rows = await env.DB.prepare(`${base} WHERE s.mode = ? AND s.ranked = 1 GROUP BY s.player_id ORDER BY score DESC, s.time_ms ASC LIMIT 25`).bind(mode).all();
   }
   const me = url.searchParams.get('me');
   return json({ ok: true, mode, scope, entries: rows.results.map((r, i) => ({ rank: i + 1, nickname: r.nickname, score: r.score, timeMs: r.time_ms, hints: r.hints, me: !!me && r.player_id === me })) },
@@ -270,7 +298,7 @@ async function me(env, url) {
   if (!validId(id)) return err('bad id');
   const p = await env.DB.prepare('SELECT nickname, games, best_streak, created_at FROM players WHERE id = ?').bind(id).first();
   if (!p) return json({ ok: true, player: null });
-  const bests = await env.DB.prepare('SELECT mode, MAX(score) best, MIN(time_ms) fastest, COUNT(*) games FROM scores WHERE player_id = ? GROUP BY mode').bind(id).all();
+  const bests = await env.DB.prepare('SELECT mode, MAX(score) best, MIN(time_ms) fastest, COUNT(*) games FROM scores WHERE player_id = ? AND ranked = 1 GROUP BY mode').bind(id).all();
   const ach = await env.DB.prepare('SELECT code, earned_at FROM achievements WHERE player_id = ? ORDER BY earned_at').bind(id).all();
   return json({ ok: true, player: p, bests: bests.results, achievements: ach.results.map(a => ({ ...a, title: ACH[a.code] || a.code })) });
 }
@@ -297,6 +325,8 @@ async function api(request, env, url) {
   }
   if (path === '/api/player' && m === 'POST') return upsertPlayer(env, request);
   if (path === '/api/scores' && m === 'POST') return submitScore(env, request);
+  if (path === '/api/play/start' && m === 'POST') return playStamp(env, request, 'start');
+  if (path === '/api/play/finish' && m === 'POST') return playStamp(env, request, 'finish');
   if (path === '/api/feedback' && m === 'POST') return submitFeedback(env, request);
   if (path === '/api/leaderboard' && m === 'GET') return leaderboard(env, url);
   if (path === '/api/me' && m === 'GET') return me(env, url);
@@ -326,5 +356,6 @@ export default {
     const tomorrow = utcDay(Date.now() + 86400000);
     for (const mode of Object.keys(MODES)) { await ensureDaily(env, utcDay(), mode); await ensureDaily(env, tomorrow, mode); }
     await env.DB.prepare('DELETE FROM rate_limits WHERE window < ?').bind(Math.floor(Date.now() / 60000) - 10).run();
+    await env.DB.prepare('DELETE FROM plays WHERE started_at < ?').bind(Date.now() - 30 * 86400000).run();
   },
 };

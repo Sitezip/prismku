@@ -18,11 +18,18 @@ for (const vp of [{ width: 375, height: 733, deviceScaleFactor: 3, isMobile: tru
   await sleep(2300);
   st = await p.evaluate(() => ({ t: document.querySelector('#hud-time').textContent, paused: document.body.classList.contains('paused') }));
   assert.ok(!st.paused, 'running after Let’s play'); assert.ok(st.t === '0:02' || st.t === '0:01', 'timer runs after closing help: ' + st.t);
-  // Leaderboard dialog pauses too; Esc resumes.
-  await p.click('#btn-help'); await sleep(1500);
-  const t1 = await p.evaluate(() => window.__prismku.G && document.querySelector('#hud-time').textContent);
-  assert.equal(t1, st.t, 'paused while help reopened'); await p.keyboard.press('Escape'); await sleep(200);
-  assert.ok(!(await p.evaluate(() => document.body.classList.contains('paused'))), 'Esc resumes');
+  // Anti-cheat: once the board has been seen, menus no longer pause the clock (look → menu → solve on paper).
+  assert.ok(await p.evaluate(() => window.__prismku.G.seen), 'board marked seen after Let’s play');
+  const e0 = await p.evaluate(() => window.__prismku.elapsed());
+  await p.click('#btn-board'); await sleep(2500);
+  st = await p.evaluate(() => ({ paused: document.body.classList.contains('paused'), e: window.__prismku.elapsed() }));
+  assert.ok(!st.paused, 'board not veiled once seen'); assert.ok(st.e - e0 >= 2300, 'clock ran while leaderboard open: ' + (st.e - e0));
+  await p.keyboard.press('Escape'); await sleep(200);
+  // Leaving the page doesn't stop it either: progress restored after a reload counts the time away.
+  const e1 = await p.evaluate(() => window.__prismku.elapsed()); await sleep(1500);
+  await p.reload({ waitUntil: 'networkidle0' }); await sleep(300);
+  const e2 = await p.evaluate(() => window.__prismku.elapsed());
+  assert.ok(e2 - e1 >= 1500, 'time away counted after reload: ' + (e2 - e1));
   // Rows equal and every divider sits in the middle of its gap, on every boxed size.
   for (const mode of ['easy', 'hard', 'expert']) {
     await p.click(`#diff [data-mode="${mode}"]`); await sleep(250);

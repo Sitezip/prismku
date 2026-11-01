@@ -17,12 +17,25 @@ const wrong = p.solution.slice(); const e = p.puzzle.findIndex(v => !v); wrong[e
 assert.equal((await j('scores', { ...base, grid: gridToString(wrong) })).status, 400, 'invalid grid rejected');
 assert.equal((await j('scores', { ...base, grid: gridToString(p.solution), timeMs: 100 })).status, 400, 'too-fast rejected');
 assert.equal((await j('scores', { ...base, grid: gridToString(p.solution), seed: d.seed + 1 })).status, 400, 'wrong daily seed rejected');
+// Server clock: board shown (start), solved ~5s later (finish), client claims 15s → accepted as is, ranked.
+assert.ok((await j('play/start', { playerId: id, mode: 'easy', seed: d.seed })).ok);
+assert.equal((await j('play/finish', { playerId: id, mode: 'easy', seed: d.seed, grid: gridToString(wrong) })).status, 400, 'finish needs a real solution');
+await new Promise(r => setTimeout(r, 5000));
+assert.ok((await j('play/finish', { playerId: id, mode: 'easy', seed: d.seed, grid: gridToString(p.solution) })).ok);
 const ok = await j('scores', { ...base, grid: gridToString(p.solution) });
-assert.ok(ok.ok, JSON.stringify(ok)); console.log('score', ok);
+assert.ok(ok.ok && ok.ranked && ok.timeMs === 15000 && !ok.clock, JSON.stringify(ok)); console.log('score', ok);
 assert.equal((await j('scores', { ...base, grid: gridToString(p.solution) })).status, 409, 'duplicate daily rejected');
 const f = generate('hard', 12345);
-const ok2 = await j('scores', { ...base, mode: 'hard', seed: 12345, daily: false, grid: gridToString(f.solution), timeMs: 45000, moves: 30 });
-assert.ok(ok2.ok, JSON.stringify(ok2));
+await j('play/start', { playerId: id, mode: 'hard', seed: 12345 });
+await new Promise(r => setTimeout(r, 20000));
+await j('play/finish', { playerId: id, mode: 'hard', seed: 12345, grid: gridToString(f.solution) });
+// Exploit: claims 10s for a board first shown 20s ago → corrected to the server span (minus 3s slack).
+const ok2 = await j('scores', { ...base, mode: 'hard', seed: 12345, daily: false, grid: gridToString(f.solution), timeMs: 10000, moves: 30 });
+assert.ok(ok2.ok && ok2.clock === 'clock' && ok2.timeMs >= 16500, JSON.stringify(ok2));
+// No start stamp at all → stored but unranked.
+const f2 = generate('hard', 777);
+const un = await j('scores', { ...base, mode: 'hard', seed: 777, daily: false, grid: gridToString(f2.solution), timeMs: 45000, moves: 30 });
+assert.ok(un.ok && un.ranked === false && un.clock === 'unverified' && !un.allTimeRecord, JSON.stringify(un));
 const lb = await j(`leaderboard?mode=easy&scope=daily&me=${id}`); assert.ok(lb.entries.some(x => x.me && x.nickname === nick));
 const lb2 = await j('leaderboard?mode=hard&scope=all'); assert.ok(lb2.entries.length >= 1);
 const me = await j('me?id=' + id); assert.ok(me.achievements.length >= 2); console.log('me', me.achievements.map(a => a.code));

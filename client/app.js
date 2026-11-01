@@ -90,25 +90,50 @@ function newGame(play, mode, seed) {
   else {
     const p = generate(mode, seed);
     G = { play, mode, seed: p.seed, day, number: dayNumber(day), puzzle: p.puzzle, solution: p.solution, grid: p.puzzle.slice(),
-      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], result: null };
+      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], result: null, seen: false };
   }
   G.key = key; G.startedAt = performance.now();
   sel = -1; brush = 0;
   settings.play = play; settings.mode = mode; saveSettings();
   render(true); startTimer(); updatePaused();
-  if (G.done) showDoneState();
+  if (G.done) showDoneState(); else if (G.seen) sendStart();
 }
-function restore(s) { const p = generate(s.mode, s.seed); return { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution }; }
+function restore(s) {
+  const p = generate(s.mode, s.seed);
+  const g = { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution };
+  // Progress saved before the anti-pause fix has no `seen` flag: any played board counts as seen.
+  if (g.seen === undefined) g.seen = g.moves > 0 || g.elapsed > 0;
+  // Once a board has been seen its clock never stops, even while you're away (closed tab, other board),
+  // otherwise you could look, leave, solve on paper and come back. The server clock enforces the same rule.
+  if (g.seen && !g.done && g.savedAt) g.elapsed += Math.max(0, Math.min(Date.now() - g.savedAt, 7 * 86400000));
+  return g;
+}
 function persist() {
   if (!G) return;
-  const { puzzle, solution, startedAt, key, ...rest } = G;
-  rest.elapsed = elapsed(); rest.hist = rest.hist.slice(-200);
+  const { puzzle, solution, startedAt, key, finishP, ...rest } = G;
+  rest.elapsed = elapsed(); rest.hist = rest.hist.slice(-200); rest.savedAt = Date.now();
   store.set(G.key, rest);
 }
-// The clock only runs while nothing is "holding" it: an open dialog (help, leaderboards, feedback…) or a hidden tab.
-// First-time players read the how-to with the timer paused and the board veiled (ticket #3).
+// Anti-cheat (Jake, 2026-11-01): pausing after the board was visible let you study it, open a menu, solve on paper
+// and enter the answer in seconds. Now the clock can only be held (dialog open / tab hidden, board veiled) before a
+// board has ever been shown — e.g. a first-time player reading the how-to. Once the board has been painted
+// unveiled, the clock runs until it is solved, menus or not. The server times the same span (see /api/play/*).
 const holds = new Set(document.hidden ? ['hidden'] : []);
-const running = () => holds.size === 0;
+const running = () => holds.size === 0 || !!(G && G.seen && !G.done);
+function checkSeen() {
+  if (!G || G.seen || G.done || holds.size) return;
+  const g = G; // seen once two frames have painted with the board unveiled
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (G === g && !g.seen && !holds.size) markSeen(g); }));
+}
+function markSeen(g) {
+  if (g.seen) return;
+  if (G === g) { g.elapsed = elapsed(); g.startedAt = performance.now(); }
+  g.seen = true; if (G === g) { persist(); sendStart(); }
+}
+function sendStart() {
+  if (ARCHIVE || !G || G.done) return;
+  api('play/start', { playerId: player.id, mode: G.mode, seed: G.seed }).catch(() => {});
+}
 function setHold(reason, on) {
   if (on === holds.has(reason)) return;
   const was = running();
@@ -117,7 +142,7 @@ function setHold(reason, on) {
   if (G) G.startedAt = performance.now();
   if (was !== running()) updatePaused();
 }
-function updatePaused() { document.body.classList.toggle('paused', !!G && !G.done && !running()); if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); }
+function updatePaused() { document.body.classList.toggle('paused', !!G && !G.done && !running()); if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); checkSeen(); }
 function elapsed() { return G.done ? G.elapsed : G.elapsed + (running() ? performance.now() - G.startedAt : 0); }
 function startTimer() {
   clearInterval(tick);
@@ -211,6 +236,7 @@ function clearPeerNotes(i, v) {
 
 function place(i, v) {
   if (G.done || i < 0 || G.puzzle[i]) return;
+  if (!G.seen) markSeen(G);
   const prev = G.grid[i];
   if (prev === v) return;
   G.hist.push({ i, prev, places: G.places[i], hinted: G.hinted[i] });
@@ -290,6 +316,8 @@ function confetti() {
 
 async function win() {
   G.elapsed = elapsed(); G.done = true; sel = -1; brush = 0;
+  // Stamp the solve on the server right away (even before a nickname exists) so a later submit is timed to now.
+  if (!ARCHIVE) G.finishP = api('play/finish', { playerId: player.id, mode: G.mode, seed: G.seed, grid: gridToString(G.grid) }).catch(() => {});
   const score = computeScore(G.mode, G.elapsed, G.hints, G.mistakes);
   G.result = { score, local: true };
   render(false); $('#board').classList.add('win'); sfx.win(); confetti();
@@ -319,10 +347,11 @@ async function submit() {
   if (!await ensureRegistered(player.nick)) return;
   const body = { playerId: player.id, secret: player.secret, mode: G.mode, seed: G.seed, daily: G.play === 'daily', day: G.day,
     grid: gridToString(G.grid), timeMs: Math.round(G.elapsed), moves: G.moves, hints: G.hints, mistakes: G.mistakes, version: CONFIG.version };
+  await G.finishP;
   let r = await api('scores', body);
   if (r.status === 401) { player.registered = false; if (await ensureRegistered(player.nick)) r = await api('scores', body); }
   if (r.ok) {
-    Object.assign(G.result, { submitted: true, score: r.score, dailyRank: r.dailyRank, streak: r.streak, allTimeRecord: r.allTimeRecord, achievements: r.achievements });
+    Object.assign(G.result, { submitted: true, score: r.score, dailyRank: r.dailyRank, streak: r.streak, allTimeRecord: r.allTimeRecord, achievements: r.achievements, ranked: r.ranked !== false, clock: r.clock || null, serverMs: r.timeMs });
     persist();
     if ($('#dlg').open && $('#win-extra')) $('#win-extra').innerHTML = winExtra();
     (r.achievements || []).forEach((a, k) => setTimeout(() => toast('🏅 ' + a.title), 1200 + k * 2800));
@@ -336,7 +365,8 @@ function winExtra() {
   if (ARCHIVE) return `<p class="tip">Archive version — scores aren’t submitted. <a href="/">Play the latest Prismku</a>.</p>`;
   if (!player.nick) return `<p>Add your name to the leaderboard:</p><input type="text" id="nick" maxlength="16" placeholder="Nickname" autocomplete="nickname"><div class="row"><button class="btn primary" data-act="save-nick">Save & submit</button></div>`;
   if (!r.submitted) return `<p class="tip">Submitting score…</p>`;
-  return `<p style="text-align:center">${r.dailyRank ? `🏆 Daily rank <b>#${r.dailyRank}</b>` : 'Score saved'}${r.streak ? ` · 🔥 ${r.streak}-day streak` : ''}${r.allTimeRecord ? ' · ✨ New all-time record!' : ''}</p>
+  if (r.ranked === false) return `<p class="tip">⚠️ Unranked: the server couldn’t confirm when this board was first shown, so this time stays off the leaderboards.</p>`;
+  return `${r.clock === 'clock' && r.serverMs ? `<p class="tip">⏱ Timed by the server clock: ${fmt(r.serverMs)} (${r.score} pts)</p>` : ''}<p style="text-align:center">${r.dailyRank ? `🏆 Daily rank <b>#${r.dailyRank}</b>` : 'Score saved'}${r.streak ? ` · 🔥 ${r.streak}-day streak` : ''}${r.allTimeRecord ? ' · ✨ New all-time record!' : ''}</p>
     ${(r.achievements || []).map(a => `<div class="ach">🏅 ${esc(a.title)}</div>`).join('')}`;
 }
 
@@ -418,6 +448,7 @@ function showHelp() {
     <p>👉 Tap a tile, then tap a color. Or tap a color first to “paint” several tiles.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
+    <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
     <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
     <div class="row"><button class="btn primary" data-act="close">Let’s play</button></div>`);
@@ -572,5 +603,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint };
+  window.__prismku = { get G() { return G; }, place, hint, elapsed: () => (G ? elapsed() : 0) };
 })();

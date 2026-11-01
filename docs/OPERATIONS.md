@@ -49,3 +49,13 @@ UPDATE feedback SET status = 'triaged' WHERE id = 1;
 -- Possible abuse: many tickets from one IP hash (hash rotates daily)
 SELECT ip_hash, COUNT(*) n FROM feedback GROUP BY ip_hash HAVING n > 5 ORDER BY n DESC;
 ```
+
+## Anti-cheat clock (scores)
+- `plays(player_id, mode, seed, started_at, finished_at)`: server stamps from `/api/play/start` (board first shown) and
+  `/api/play/finish` (valid solved grid). `src/clock.js` `checkClock()` decides each submit:
+  no start / span < floor → `ranked = 0, check_note = 'unverified'`; claim < span − 3s → `time_ms` = span − 3s,
+  `check_note = 'clock'` (original claim in `client_ms`). Leaderboards, records, daily rank and speed badges use `ranked = 1` only.
+- Floor: `max(mode.minMs, emptyTiles × 450ms)`. Cron deletes `plays` older than 30 days.
+```sql
+SELECT id, mode, daily_id, client_ms, time_ms, check_note, ranked FROM scores WHERE check_note IS NOT NULL ORDER BY id DESC LIMIT 50;
+```
