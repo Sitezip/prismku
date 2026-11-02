@@ -110,6 +110,7 @@ input[type=text]{width:100%;padding:10px 12px;border-radius:12px;border:1px soli
 .themes{display:flex;gap:8px;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--bg2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;transition:transform .3s;z-index:20;max-width:90vw;text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0)}
+.toast[popover]{inset:auto;left:50%;bottom:24px;margin:0;color:var(--text);overflow:visible}
 .fx{position:fixed;inset:0;pointer-events:none;z-index:30;overflow:hidden}
 .spark{position:absolute;width:10px;height:10px;border-radius:3px;animation:fall 1.6s ease-out forwards}
 @keyframes fall{to{transform:translate(var(--x),var(--y)) rotate(540deg);opacity:0}}

@@ -1,0 +1,21 @@
+import puppeteer from 'puppeteer-core';
+import assert from 'node:assert/strict';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const ctx = b.defaultBrowserContext(); await ctx.overridePermissions('http://127.0.0.1:8787', ['clipboard-read','clipboard-write','clipboard-sanitized-write']);
+const p = await b.newPage(); await p.setViewport({ width: 1732, height: 983 });
+const errs=[]; p.on('pageerror', e => errs.push(e.message));
+await p.goto('http://127.0.0.1:8787/', { waitUntil: 'networkidle0' });
+await p.evaluate(() => document.querySelector('#dlg').close());
+await p.evaluate(() => { const g = window.__prismku.G; g.grid.forEach((v, i) => { if (!g.puzzle[i]) window.__prismku.place(i, g.solution[i]); }); });
+await new Promise(r => setTimeout(r, 1500));
+await p.click('[data-act="share"]'); await new Promise(r => setTimeout(r, 500));
+const st = await p.evaluate(async () => ({ rect: JSON.stringify(document.querySelector('#toast').getBoundingClientRect()), cs: getComputedStyle(document.querySelector('#toast')).transform + ' ' + getComputedStyle(document.querySelector('#toast')).display, btn: document.querySelector('[data-act="share"]').textContent, pop: document.querySelector('#toast').matches(':popover-open'), clip: await navigator.clipboard.readText(),
+  top: (() => { const t = document.querySelector('#toast').getBoundingClientRect(); const el = document.elementFromPoint(t.left + t.width/2, t.top + t.height/2); return el?.id; })() }));
+console.log(st); assert.match(st.btn, /Copied/); assert.ok(st.pop); assert.match(st.clip, /Prismku/);
+await p.screenshot({ path: '/tmp/share-desktop.png' }); console.log('top', st.top);
+const sz = await p.evaluate(async () => (await window.__prismku.resultCard()).size); console.log('card bytes', sz); assert.ok(sz > 10000);
+const url = await p.evaluate(async () => { const b = await window.__prismku.resultCard(); return await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }); });
+(await import('node:fs')).writeFileSync('/tmp/card.png', Buffer.from(url.split(',')[1], 'base64'));
+await p.click('[data-act="share-img"]'); await new Promise(r => setTimeout(r, 400));
+console.log('img btn', await p.evaluate(() => document.querySelector('[data-act="share-img"]').textContent));
+assert.deepEqual(errs, []); console.log('share test passed'); await b.close();

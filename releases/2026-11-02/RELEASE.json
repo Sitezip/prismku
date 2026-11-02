@@ -1,0 +1,9 @@
+{
+  "day": "2026-11-02",
+  "title": "Show Off",
+  "notes": [
+    "Share result works on desktop (ticket #4): visible confirmation + copy fallback",
+    "New 🖼️ Image button: shareable rainbow result card PNG"
+  ],
+  "frozenAt": "2026-11-02T19:09:42.965Z"
+}

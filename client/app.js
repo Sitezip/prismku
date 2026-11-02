@@ -68,7 +68,14 @@ const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 const dayNumber = (day) => Math.round((Date.parse(day) - Date.parse(CONFIG.launchDay)) / 86400000) + 1;
 const fmt = (ms) => { const s = Math.floor(ms / 1000), m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), ms); }
+// The toast is a manual popover so it renders in the top layer, above an open modal dialog (ticket #4: on desktop the
+// "copied" confirmation was hidden behind the win dialog). Browsers without popovers fall back to the fixed toast.
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; clearTimeout(toast.h); clearTimeout(toast.h2);
+  if (t.showPopover) { try { if (t.matches(':popover-open')) t.hidePopover(); t.showPopover(); } catch {} }
+  requestAnimationFrame(() => t.classList.add('show'));
+  toast.h = setTimeout(() => { t.classList.remove('show'); toast.h2 = setTimeout(() => { try { t.hidePopover?.(); } catch {} }, 320); }, ms);
+}
 
 // ---------- game state ----------
 let G = null;          // current game
@@ -380,6 +387,7 @@ function showWin() {
     <div id="win-extra">${winExtra()}</div>
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
+    <button class="btn" data-act="share-img">🖼️ Image</button>
     <button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
     <button class="btn" data-act="lb">Leaderboard</button>
     <button class="btn" data-act="feedback">💬 Feedback</button></div>`);
@@ -395,12 +403,70 @@ function updateCountdown() {
 }
 setInterval(updateCountdown, 1000);
 
+// Copy text with the async Clipboard API, falling back to a hidden textarea + execCommand (older / restricted browsers).
+async function copyText(text) {
+  try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; } } catch {}
+  try {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+    ($('#dlg').open ? $('#dlg') : document.body).appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch { return false; }
+}
+function flashBtn(act, label) {
+  const b = document.querySelector(`#dlg [data-act="${act}"]`); if (!b) return;
+  b.dataset.label ??= b.textContent; b.textContent = label; clearTimeout(b._t); b._t = setTimeout(() => { b.textContent = b.dataset.label; }, 2200);
+}
+function selectSharePre() { const pre = document.querySelector('#dlg .share-pre'); if (!pre) return; const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
 async function share() {
   const text = shareText();
-  try {
-    if (navigator.share && matchMedia('(pointer:coarse)').matches) { await navigator.share({ text }); return; }
-    await navigator.clipboard.writeText(text); toast('Result copied — paste it anywhere!');
-  } catch { toast('Copy the result above to share'); }
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+  }
+  if (await copyText(text)) { flashBtn('share', '✓ Copied!'); toast('Result copied — paste it anywhere!'); }
+  else { selectSharePre(); flashBtn('share', 'Press Ctrl+C'); toast('Result selected above — press Ctrl+C (⌘C) to copy'); }
+}
+
+// ---------- result card image (share / download a 1080×1080 PNG) ----------
+const CARD_HUES = ['#ff3b47', '#ff8c1a', '#ffd60a', '#2ecc71', '#19d3c5', '#2f7bff', '#9b5cff', '#ff5cc8'];
+function resultCard() {
+  const S = 1080, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const x = cv.getContext('2d'), m = MODES[G.mode], n = m.size, r = G.result || {};
+  const font = (w, px) => `${w} ${px}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
+  x.fillStyle = '#120b2e'; x.fillRect(0, 0, S, S);
+  CARD_HUES.forEach((c, k) => { const g = x.createRadialGradient((k * 0.37 % 1) * S, ((k * 0.61 + 0.2) % 1) * S, 0, (k * 0.37 % 1) * S, ((k * 0.61 + 0.2) % 1) * S, S * 0.45); g.addColorStop(0, c + '40'); g.addColorStop(1, c + '00'); x.fillStyle = g; x.fillRect(0, 0, S, S); });
+  const rb = x.createLinearGradient(0, 0, S, 0); CARD_HUES.forEach((c, k) => rb.addColorStop(k / (CARD_HUES.length - 1), c));
+  x.strokeStyle = rb; x.lineWidth = 16; x.strokeRect(8, 8, S - 16, S - 16);
+  x.textAlign = 'center'; x.fillStyle = rb; x.font = font(800, 92); x.fillText('Prismku', S / 2, 130);
+  x.fillStyle = '#f6f1ff'; x.font = font(600, 44);
+  x.fillText(G.play === 'daily' ? `Daily #${G.number} · ${m.label} ${n}×${n}` : `${m.label} ${n}×${n} · Free play`, S / 2, 200);
+  // spoiler-free board: tile state only (given / solved first try / fixed / hint), tinted along a rainbow diagonal
+  const B = 600, ox = (S - B) / 2, oy = 240, cell = B / n, gap = Math.max(4, cell * 0.08);
+  for (let rr = 0; rr < n; rr++) for (let c = 0; c < n; c++) {
+    const i = rr * n + c, hue = CARD_HUES[Math.floor(((rr + c) / (2 * n - 1)) * CARD_HUES.length) % CARD_HUES.length];
+    const given = !!G.puzzle[i], hinted = !!G.hinted[i], retry = !given && !hinted && G.places[i] > 1;
+    x.globalAlpha = given ? 0.28 : 1; x.fillStyle = hinted ? '#8ab6ff' : hue;
+    const px = ox + c * cell + gap / 2, py = oy + rr * cell + gap / 2, w = cell - gap;
+    x.beginPath(); x.roundRect ? x.roundRect(px, py, w, w, w * 0.18) : x.rect(px, py, w, w); x.fill();
+    x.globalAlpha = 1;
+    if (retry || hinted) { x.fillStyle = 'rgba(18,11,46,.85)'; x.font = font(800, w * 0.45); x.textBaseline = 'middle'; x.fillText(hinted ? '💡' : '↺', px + w / 2, py + w / 2 + 2); x.textBaseline = 'alphabetic'; }
+  }
+  x.fillStyle = '#f6f1ff'; x.font = font(700, 50);
+  x.fillText(`⏱ ${fmt(G.elapsed)}   💡 ${G.hints}   ⚡ ${G.mistakes}${r.score ? `   ${r.score} pts` : ''}`, S / 2, 940);
+  x.fillStyle = '#ffd60a'; x.font = font(700, 40); x.fillText('Can you beat it? prismku.com', S / 2, 1010);
+  return new Promise(res => cv.toBlob(res, 'image/png'));
+}
+async function shareImage() {
+  const blob = await resultCard(); if (!blob) return toast('Could not draw the image');
+  const name = `prismku-${G.play === 'daily' ? `daily-${G.number}` : 'free'}-${G.mode}.png`;
+  const file = typeof File === 'function' ? new File([blob], name, { type: 'image/png' }) : null;
+  if (file && navigator.canShare?.({ files: [file] }) && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ files: [file], text: shareText() }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  flashBtn('share-img', '✓ Saved!'); toast('Result card saved — attach it anywhere!');
 }
 
 // ---------- dialogs ----------
@@ -535,7 +601,8 @@ $('#dlg').addEventListener('click', async e => {
   if (lbm) return showLeaderboard(lbm.dataset.lbmode, dlgState.lbscope, dlgState.lbday);
   if (lbs) return showLeaderboard(dlgState.lbmode, lbs.dataset.lbscope, dlgState.lbday);
   if (th) { if (th.dataset.pro && CONFIG.pro.enabled && !store.get('pro', false, 'pk.')) { if (CONFIG.pro.checkoutUrl) location.href = CONFIG.pro.checkoutUrl; return; } settings.theme = th.dataset.theme; saveSettings(); applySettings(); return showMe(); }
-    if (a === 'share') share();
+  if (a === 'share') share();
+  if (a === 'share-img') shareImage();
   if (a === 'feedback') showFeedback();
   if (a === 'fb-send') sendFeedback();
   if (a === 'lb') showLeaderboard(G.mode, G.play === 'daily' ? 'daily' : 'all', G.play === 'daily' ? G.day : serverDay);
@@ -603,5 +670,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, elapsed: () => (G ? elapsed() : 0) };
 })();

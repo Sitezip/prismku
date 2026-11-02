@@ -2,6 +2,10 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-02 — "Show Off"
+- Fixed (ticket #4): "Share result" seemed to do nothing on desktop. The copy worked, but its confirmation toast was hidden behind the win dialog. Toasts now appear above dialogs, the button itself flashes "✓ Copied!", and browsers that block clipboard access fall back to a classic copy, or select the result text with a Ctrl+C prompt.
+- New 🖼️ Image button on the win screen: a 1080×1080 rainbow result card (spoiler-free tile map, time, hints, clashes, score and a "Can you beat it?" link). Phones open the share sheet with the image attached; desktops download the PNG.
+
 ## 2026-11-01 (hotfix) — "Fair Clock" anti-cheat
 - Closed an exploit in today's pause: you could look at the board, open a menu to pause, solve it on paper, then enter it in seconds. The clock now pauses only before a board has ever been shown (e.g. first-time players reading the how-to). Once you've seen a board it runs until solved — menus, hidden tabs, switching boards and reloads included.
 - Server-side clock: the Worker stamps when each player first sees a board (`/api/play/start`) and when they first report a valid solution (`/api/play/finish`). A submitted time can't beat that server span (3s slack); faster claims are replaced by the server time. Times with no plausible server start, or faster than 450 ms per empty tile, are stored unranked and kept off leaderboards, records and speed badges. Migration `0003_play_clock.sql`.
