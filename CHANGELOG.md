@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-03 — "Calendar"
+- New 📅 Daily calendar (next to Free play, in the win dialog and after a solved daily): a weekday grid of every daily since launch with a colored dot for each size you solved, a glowing frame for today, and a rainbow tile when you cleared all four sizes. Shows your current and best daily streak.
+- Replay missed dailies: tap any past day to play that day's puzzle for your current size as practice (free-play scoring; only today's daily counts for streaks and daily ranks). Replays show as hollow dots, and their share text and result card say "Daily #N replay".
+- No new player tickets today; all earlier tickets are closed.
+
 ## 2026-11-02 — "Show Off"
 - Fixed (ticket #4): "Share result" seemed to do nothing on desktop. The copy worked, but its confirmation toast was hidden behind the win dialog. Toasts now appear above dialogs, the button itself flashes "✓ Copied!", and browsers that block clipboard access fall back to a classic copy, or select the result text with a Ctrl+C prompt.
 - New 🖼️ Image button on the win screen: a 1080×1080 rainbow result card (spoiler-free tile map, time, hints, clashes, score and a "Can you beat it?" link). Phones open the share sheet with the image attached; desktops download the PNG.

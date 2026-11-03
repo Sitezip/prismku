@@ -305,7 +305,7 @@ function shareGrid() {
 }
 function shareText() {
   const m = MODES[G.mode], r = G.result || {};
-  const head = G.play === 'daily' ? `Prismku #${G.number} 🌈 ${m.label} ${m.size}×${m.size}` : `Prismku 🌈 ${m.label} ${m.size}×${m.size}`;
+  const head = G.play === 'daily' ? `Prismku #${G.number} 🌈 ${m.label} ${m.size}×${m.size}` : G.replay ? `Prismku #${dayNumber(G.replay)} (replay) 🌈 ${m.label} ${m.size}×${m.size}` : `Prismku 🌈 ${m.label} ${m.size}×${m.size}`;
   return `${head}\n⏱ ${fmt(G.elapsed)} · 💡${G.hints} · ⚡${G.mistakes}${r.score ? ` · ${r.score} pts` : ''}\n${shareGrid()}${CONFIG.siteUrl.replace('https://', '')}`;
 }
 
@@ -335,6 +335,7 @@ async function win() {
   bests[G.mode] = { score: Math.max(b.score, score), fastest: b.fastest ? Math.min(b.fastest, G.elapsed) : G.elapsed, solved: b.solved + 1 };
   store.set('bests', bests);
   if (G.play === 'daily') { const d = store.get('dailies', {}); d[`${G.day}:${G.mode}`] = { score, t: G.elapsed }; store.set('dailies', d); }
+  if (G.replay) { const d = store.get('replays', {}); d[`${G.replay}:${G.mode}`] = { score, t: G.elapsed }; store.set('replays', d); }
   G.result.personalBest = pb;
   persist();
   setTimeout(() => showWin(), 900);
@@ -380,7 +381,7 @@ function winExtra() {
 function showWin() {
   const m = MODES[G.mode], r = G.result || {};
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button>
-    <h3>${G.play === 'daily' ? `Daily #${G.number} solved!` : 'Solved!'} 🌈</h3>
+    <h3>${G.play === 'daily' ? `Daily #${G.number} solved!` : G.replay ? `Daily #${dayNumber(G.replay)} replay solved!` : 'Solved!'} 🌈</h3>
     <div class="big">${r.score} pts</div>
     <div class="kv"><div><b>${fmt(G.elapsed)}</b>time</div><div><b>${G.moves}</b>moves</div><div><b>${G.hints}</b>hints</div><div><b>${G.mistakes}</b>clashes</div></div>
     ${r.personalBest ? `<p style="text-align:center">⭐ Personal best for ${m.label}!</p>` : ''}
@@ -388,13 +389,13 @@ function showWin() {
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
     <button class="btn" data-act="share-img">🖼️ Image</button>
-    <button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
+    <button class="btn" data-act="calendar">📅 Calendar</button><button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
     <button class="btn" data-act="lb">Leaderboard</button>
     <button class="btn" data-act="feedback">💬 Feedback</button></div>`);
 }
 
 function showDoneState() {
-  $('#tip').innerHTML = G.play === 'daily' ? `Solved in ${fmt(G.elapsed)} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a>` : 'Solved! Tap ✨ New for another.';
+  $('#tip').innerHTML = G.play === 'daily' ? `Solved in ${fmt(G.elapsed)} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a> · <a href="#" data-act="calendar">📅 Past dailies</a>` : G.replay ? 'Replay solved! <a href="#" data-act="calendar">📅 Pick another day</a> or tap ✨ New.' : 'Solved! Tap ✨ New for another.';
   updateCountdown();
 }
 function updateCountdown() {
@@ -440,7 +441,7 @@ function resultCard() {
   x.strokeStyle = rb; x.lineWidth = 16; x.strokeRect(8, 8, S - 16, S - 16);
   x.textAlign = 'center'; x.fillStyle = rb; x.font = font(800, 92); x.fillText('Prismku', S / 2, 130);
   x.fillStyle = '#f6f1ff'; x.font = font(600, 44);
-  x.fillText(G.play === 'daily' ? `Daily #${G.number} · ${m.label} ${n}×${n}` : `${m.label} ${n}×${n} · Free play`, S / 2, 200);
+  x.fillText(G.play === 'daily' ? `Daily #${G.number} · ${m.label} ${n}×${n}` : G.replay ? `Daily #${dayNumber(G.replay)} replay · ${m.label} ${n}×${n}` : `${m.label} ${n}×${n} · Free play`, S / 2, 200);
   // spoiler-free board: tile state only (given / solved first try / fixed / hint), tinted along a rainbow diagonal
   const B = 600, ox = (S - B) / 2, oy = 240, cell = B / n, gap = Math.max(4, cell * 0.08);
   for (let rr = 0; rr < n; rr++) for (let c = 0; c < n; c++) {
@@ -508,6 +509,43 @@ async function showMe() {
   }
 }
 
+// ---------- daily calendar (2026-11-03): see which dailies you solved, keep your streak, replay missed days ----------
+const addDays = (day, k) => utcDay(Date.parse(day) + k * 86400000);
+function streaks(solvedDays, today) {
+  // solvedDays: Set of YYYY-MM-DD with at least one daily solved. Current streak may end today or yesterday.
+  const days = [...solvedDays].sort(); let best = 0, run = 0, prev = null;
+  for (const d of days) { run = prev && addDays(prev, 1) === d ? run + 1 : 1; best = Math.max(best, run); prev = d; }
+  let cur = 0, d = solvedDays.has(today) ? today : addDays(today, -1);
+  while (solvedDays.has(d)) { cur++; d = addDays(d, -1); }
+  return { cur, best };
+}
+function showCalendar() {
+  const dailies = store.get('dailies', {}), replays = store.get('replays', {});
+  const solved = new Set(Object.keys(dailies).map(k => k.split(':')[0]));
+  const { cur, best } = streaks(solved, serverDay);
+  const first = CONFIG.launchDay > addDays(serverDay, -34) ? CONFIG.launchDay : addDays(serverDay, -34);
+  const lead = new Date(Date.parse(first)).getUTCDay(); // align columns to weekdays (UTC, like the daily)
+  let cells = '';
+  for (let i = 0; i < lead; i++) cells += '<span class="cal-pad"></span>';
+  for (let d = first; d <= serverDay; d = addDays(d, 1)) {
+    const dots = MODE_KEYS.map((k, j) => `<i class="${dailies[`${d}:${k}`] ? 'on' : replays[`${d}:${k}`] ? 'rp' : ''}" style="--col:var(--c${[1, 6, 4, 2][j]})" title="${MODES[k].label}"></i>`).join('');
+    const n = MODE_KEYS.filter(k => dailies[`${d}:${k}`]).length;
+    cells += `<button class="cal-day${d === serverDay ? ' today' : ''}${n === MODE_KEYS.length ? ' full' : ''}" data-calday="${d}" aria-label="Daily #${dayNumber(d)}, ${d}: ${n} of ${MODE_KEYS.length} solved"><b>${+d.slice(8)}</b><small>#${dayNumber(d)}</small><span class="cal-dots">${dots}</span></button>`;
+  }
+  openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>📅 Daily calendar</h3>
+    <p class="cal-streak">🔥 Streak <b>${cur}</b> day${cur === 1 ? '' : 's'} · ✨ Best <b>${best}</b></p>
+    <div class="cal-head">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(w => `<span>${w}</span>`).join('')}</div>
+    <div class="cal-grid">${cells}</div>
+    <p class="tip">Dots show which sizes you solved: <span class="cal-key"><i class="on" style="--col:var(--c1)"></i>Easy <i class="on" style="--col:var(--c6)"></i>Medium <i class="on" style="--col:var(--c4)"></i>Hard <i class="on" style="--col:var(--c2)"></i>Expert</span>. Hollow dots are replays. Tap a past day to replay its ${esc(MODES[G.mode].label)} puzzle as practice (free-play scoring; only today’s daily counts for streaks and daily ranks).</p>`);
+}
+function replayDaily(day) {
+  if (day >= serverDay) { closeDlg(); return startMode('daily', G.mode); }
+  persist(); closeDlg();
+  newGame('free', G.mode, dailySeed(day, G.mode));
+  if (G.replay !== day) { G.replay = day; persist(); }
+  if (!G.done) $('#tip').innerHTML = `📅 Replaying Daily #${dayNumber(day)} (${day}) · ${esc(MODES[G.mode].label)} — practice, free-play scoring.`;
+}
+
 function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
@@ -515,6 +553,7 @@ function showHelp() {
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
+    <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
     <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
     <div class="row"><button class="btn primary" data-act="close">Let’s play</button></div>`);
@@ -576,7 +615,7 @@ $('#palette').addEventListener('click', e => {
 $('#btn-notes').onclick = () => { notesOn = !notesOn; render(false); toast(notesOn ? '✏️ Notes on — colors become pencil dots' : 'Notes off', 1500); };
 $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').onclick = restart;
 $('#btn-erase').onclick = () => { if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
-$('#btn-new').onclick = () => { store.del(progressKey('free', G.mode)); newGame('free', G.mode, randomSeed()); };
+$('#btn-new').onclick = () => { store.del(progressKey('free', G.mode)); newGame('free', G.mode, randomSeed()); $('#tip').textContent = 'Tap a tile, then a color. No color may repeat in a row, column or bold box.'; };
 $('#btn-board').onclick = () => showLeaderboard();
 $('#btn-me').onclick = showMe; $('#btn-help').onclick = showHelp; $('#btn-feedback').onclick = () => showFeedback();
 $('#btn-sound').onclick = () => { settings.sound = !settings.sound; saveSettings(); applySettings(); if (settings.sound) tone(880); };
@@ -601,6 +640,9 @@ $('#dlg').addEventListener('click', async e => {
   if (lbm) return showLeaderboard(lbm.dataset.lbmode, dlgState.lbscope, dlgState.lbday);
   if (lbs) return showLeaderboard(dlgState.lbmode, lbs.dataset.lbscope, dlgState.lbday);
   if (th) { if (th.dataset.pro && CONFIG.pro.enabled && !store.get('pro', false, 'pk.')) { if (CONFIG.pro.checkoutUrl) location.href = CONFIG.pro.checkoutUrl; return; } settings.theme = th.dataset.theme; saveSettings(); applySettings(); return showMe(); }
+  const cd = e.target.closest('[data-calday]');
+  if (cd) return replayDaily(cd.dataset.calday);
+  if (a === 'calendar') return showCalendar();
   if (a === 'share') share();
   if (a === 'share-img') shareImage();
   if (a === 'feedback') showFeedback();
@@ -614,6 +656,7 @@ $('#dlg').addEventListener('click', async e => {
 });
 document.addEventListener('click', e => {
   if (e.target.closest('[data-act="showwin"]')) { e.preventDefault(); showWin(); }
+  if (!e.target.closest('#dlg') && e.target.closest('[data-act="calendar"]')) { e.preventDefault(); showCalendar(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="feedback"]')) { e.preventDefault(); showFeedback(); }
 });
 
@@ -670,5 +713,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, streaks, elapsed: () => (G ? elapsed() : 0) };
 })();
