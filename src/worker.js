@@ -1,6 +1,7 @@
 // Prismku (Rainbow Sudoku) — Cloudflare Worker: JSON API on D1 + static SPA assets.
 import { MODES, generate, isSolved, stringToGrid, gridToString, dailySeed, computeScore } from '../client/puzzle.js';
 import { checkClock, minSolveMs } from './clock.js';
+import { FIX_FROM, isValidEmail, planFixUpdate, renderFixEmail } from './feedback-mail.js';
 
 const LAUNCH_DAY = '2026-10-31';
 const NICK_RE = /^[A-Za-z0-9 _.\-]{2,16}$/;
@@ -243,7 +244,6 @@ async function playStamp(env, request, kind) {
 }
 
 const FEEDBACK_TYPES = ['bug', 'idea', 'other'];
-const EMAIL_RE = /^[^\s@<>()"',;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}$/;
 const CTX_KEYS = { version: 20, mode: 10, seed: 12, daily: 5, day: 10, ua: 300, screen: 20, viewport: 20, url: 200, playerId: 36, theme: 12, cb: 5, lang: 20, solved: 5, elapsedMs: 12 };
 
 async function submitFeedback(env, request) {
@@ -256,7 +256,7 @@ async function submitFeedback(env, request) {
   if (message.length < 5) return err('please write a little more (5+ characters)');
   if (message.length > 1000) return err('message is too long (max 1000 characters)');
   let contact = typeof b.contact === 'string' ? b.contact.trim() : '';
-  if (contact && (contact.length > 254 || !EMAIL_RE.test(contact))) return err('that email address looks invalid');
+  if (contact && !isValidEmail(contact)) return err('that email address looks invalid');
   const ctx = {};
   if (b.context && typeof b.context === 'object') {
     for (const [k, max] of Object.entries(CTX_KEYS)) {
@@ -272,6 +272,83 @@ async function submitFeedback(env, request) {
   const row = await env.DB.prepare('INSERT INTO feedback (created_at, type, message, contact, context, status, ip_hash) VALUES (?,?,?,?,?,?,?) RETURNING id')
     .bind(Date.now(), type, message, contact || null, JSON.stringify(ctx), 'new', await ipHash(env, request)).first();
   return json({ ok: true, id: row.id });
+}
+
+async function secretMatches(provided, expected) {
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(provided)),
+    crypto.subtle.digest('SHA-256', enc.encode(expected)),
+  ]);
+  const x = new Uint8Array(a);
+  const y = new Uint8Array(b);
+  if (typeof crypto.subtle.timingSafeEqual === 'function') return crypto.subtle.timingSafeEqual(x, y);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+async function adminAuthorized(env, request) {
+  const expected = env.FEEDBACK_ADMIN_SECRET;
+  if (typeof expected !== 'string' || expected.length < 16) return false;
+  const header = request.headers.get('authorization') || '';
+  const match = /^Bearer\s+(\S{1,256})$/i.exec(header);
+  if (!match) return false;
+  return secretMatches(match[1], expected);
+}
+
+// POST /api/admin/feedback/:id  { status: "done"|"fixed"|... }
+// Authorization: Bearer $FEEDBACK_ADMIN_SECRET
+// A change to done/fixed emails the address stored on that ticket, at most once.
+export async function adminFeedback(env, request, id) {
+  if (!(await adminAuthorized(env, request))) return err('unauthorized', 401);
+  if (!Number.isInteger(id) || id < 1) return err('bad ticket', 400);
+  let body;
+  try { body = await readJson(request); }
+  catch (e) {
+    if (e instanceof SyntaxError || String(e.message || '').includes('too large')) return err('bad request');
+    throw e;
+  }
+  const requested = typeof body.status === 'string' ? body.status : '';
+  const row = await env.DB.prepare(
+    `SELECT f.id, f.status, f.message, f.contact, e.sent_at AS fix_email_sent_at
+     FROM feedback f LEFT JOIN feedback_fix_email e ON e.feedback_id = f.id WHERE f.id = ?`
+  ).bind(id).first();
+  if (!row) return err('ticket not found', 404);
+  const hourAgo = Date.now() - 3600000;
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback_fix_email WHERE sent_at > ?').bind(hourAgo).first();
+  const plan = planFixUpdate(row, requested, { recentSends: Number(recent?.n || 0) });
+  if (!plan.ok) return err(plan.error, plan.http);
+  if (!plan.send) {
+    await env.DB.prepare('UPDATE feedback SET status = ? WHERE id = ?').bind(plan.status, id).run();
+    return json({ ok: true, id, status: plan.status, email: plan.email });
+  }
+  const now = Date.now();
+  const claim = await env.DB.prepare(
+    `INSERT INTO feedback_fix_email (feedback_id, sent_at) VALUES (?, ?)
+     ON CONFLICT(feedback_id) DO UPDATE SET sent_at = excluded.sent_at
+     WHERE feedback_fix_email.sent_at < ?`
+  ).bind(id, -now, -(now - 10 * 60 * 1000)).run();
+  const changes = claim?.meta?.changes ?? 0;
+  if (!changes) return json({ ok: true, id, status: row.status, email: 'in-progress' });
+  await env.DB.prepare('UPDATE feedback SET status = ? WHERE id = ?').bind('done', id).run();
+  try {
+    if (!env.EMAIL || typeof env.EMAIL.send !== 'function') throw new Error('email binding missing');
+    const notice = renderFixEmail(row.message);
+    await env.EMAIL.send({
+      to: plan.to,
+      from: FIX_FROM,
+      subject: notice.subject,
+      text: notice.text,
+      html: notice.html,
+    });
+    await env.DB.prepare('UPDATE feedback_fix_email SET sent_at = ? WHERE feedback_id = ? AND sent_at = ?').bind(Date.now(), id, -now).run();
+    return json({ ok: true, id, status: 'done', email: 'sent' });
+  } catch (e) {
+    await env.DB.prepare('DELETE FROM feedback_fix_email WHERE feedback_id = ? AND sent_at = ?').bind(id, -now).run();
+    console.error('fix email failed', e?.code || e?.message || e);
+    return json({ ok: false, id, status: 'done', email: 'failed', error: 'ticket marked done but the email could not be sent — call again to retry' }, 502);
+  }
 }
 
 async function leaderboard(env, url) {
@@ -328,6 +405,8 @@ async function api(request, env, url) {
   if (path === '/api/play/start' && m === 'POST') return playStamp(env, request, 'start');
   if (path === '/api/play/finish' && m === 'POST') return playStamp(env, request, 'finish');
   if (path === '/api/feedback' && m === 'POST') return submitFeedback(env, request);
+  const adminTicket = /^\/api\/admin\/feedback\/(\d+)$/.exec(path);
+  if (adminTicket && m === 'POST') return adminFeedback(env, request, Number(adminTicket[1]));
   if (path === '/api/leaderboard' && m === 'GET') return leaderboard(env, url);
   if (path === '/api/me' && m === 'GET') return me(env, url);
   if (path === '/api/stats' && m === 'GET') return stats(env);

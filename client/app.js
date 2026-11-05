@@ -586,19 +586,22 @@ function feedbackContext() {
 function showFeedback(type = 'bug') {
   const ctx = feedbackContext();
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>💬 Feedback & bug reports</h3>
-    <p class="tip" style="text-align:left">Found a bug or have an idea? Every note is read. Fixes ship in the game and on the <a href="/versions/">version history</a>. Prismku does not email you back.</p>
+    <p class="tip" style="text-align:left">Found a bug or have an idea? Every note is read. Fixes ship in the game and on the <a href="/versions/">version history</a>. If you leave an email, Prismku uses it only to tell you when your report is fixed.</p>
     <div class="seg" id="fb-type" role="radiogroup" aria-label="Type">${[['bug', '🐞 Bug'], ['idea', '💡 Idea'], ['other', '✉️ Other']].map(([k, l]) => `<button type="button" role="radio" data-fbtype="${k}" class="${k === type ? 'on' : ''}" aria-checked="${k === type}">${l}</button>`).join('')}</div>
     <label class="fb-field">Message <span class="fb-count" id="fb-count">0/1000</span><textarea id="fb-msg" maxlength="1000" placeholder="What happened? What did you expect?"></textarea></label>
-    <label class="fb-field">Email (optional — saved with the ticket, not used to send mail)<input type="email" id="fb-contact" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
+    <label class="fb-field">Email (optional — only to tell you when this report is fixed)<input type="email" id="fb-contact" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
     <label class="hp" aria-hidden="true">Website<input type="text" id="fb-website" tabindex="-1" autocomplete="off"></label>
     <p class="fb-ctx">Attached automatically: v${esc(ctx.version)}${ctx.mode ? ` · ${esc(MODES[ctx.mode].label)} · seed ${ctx.seed}${ctx.daily ? ' (daily)' : ''}` : ''} · ${esc(ctx.viewport)} · your browser’s user agent.</p>
     <div class="row"><button class="btn primary" data-act="fb-send" id="fb-send">Send</button><button class="btn" data-act="close">Cancel</button></div>`);
   dlgState.fbtype = type;
   const msg = $('#fb-msg'); msg.addEventListener('input', () => { $('#fb-count').textContent = `${msg.value.length}/1000`; }); msg.focus();
 }
+// Same shape as EMAIL_RE in src/feedback-mail.js. The server checks again.
+const FEEDBACK_EMAIL_RE = /^[^\s@<>()"',;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}$/;
 async function sendFeedback() {
   const message = $('#fb-msg').value.trim(), contact = $('#fb-contact').value.trim();
   if (message.length < 5) { toast('Please write a little more'); return; }
+  if (contact && (contact.length > 254 || !FEEDBACK_EMAIL_RE.test(contact))) { toast('That email address looks invalid'); return; }
   const btn = $('#fb-send'); btn.disabled = true; btn.textContent = 'Sending…';
   const r = await api('feedback', { type: dlgState.fbtype || 'bug', message, contact, website: $('#fb-website').value, context: feedbackContext() }).catch(() => ({ ok: false }));
   if (r.ok) { closeDlg(); toast(r.id ? `Thanks! Ticket #${r.id} received 💜` : 'Thanks! 💜', 3500); }
