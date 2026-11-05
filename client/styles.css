@@ -69,7 +69,9 @@ body.cb .cell.filled svg{opacity:1}
 .swatch{width:clamp(36px,calc(var(--board) / 7),56px);aspect-ratio:1;border-radius:50%;border:3px solid rgba(255,255,255,.25);background:var(--col);display:grid;place-items:center;position:relative;
   box-shadow:0 0 12px color-mix(in srgb,var(--col) 60%,transparent);transition:transform .12s}
 .swatch:active{transform:scale(.9)}
-.swatch.brush{border-color:#fff;transform:scale(1.12);box-shadow:0 0 22px var(--col)}
+.swatch.brush{border-color:#fff;border-width:4px;transform:scale(1.12);box-shadow:0 0 22px var(--col)}
+.paint-stop{display:flex;align-items:center;justify-content:center;gap:8px;width:var(--board);margin:0;border:2px solid #fff;border-radius:999px;background:rgba(18,11,46,.82);color:#fff;font-weight:700;font-size:14px;line-height:1.2;padding:8px 14px;box-shadow:0 0 16px color-mix(in srgb,var(--col,#fff) 70%,transparent)}
+.paint-stop::before{content:"";width:16px;height:16px;border-radius:50%;flex:none;background:var(--col,#fff);box-shadow:0 0 8px var(--col,#fff)}
 .swatch .cnt{position:absolute;bottom:-6px;right:-6px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;font-size:10px;padding:0 5px}
 .swatch.done{opacity:.35}
 .swatch svg{width:45%;height:45%;fill:rgba(0,0,0,.45);opacity:0} body.cb .swatch svg{opacity:1}
@@ -108,7 +110,7 @@ input[type=text]{width:100%;padding:10px 12px;border-radius:12px;border:1px soli
 .ach{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
 .ach.locked{opacity:.4}
 .themes{display:flex;gap:8px;flex-wrap:wrap}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--bg2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;transition:transform .3s;z-index:20;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--bg2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;transition:transform .3s;z-index:20;max-width:90vw;text-align:center;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .toast[popover]{inset:auto;left:50%;bottom:24px;margin:0;color:var(--text);overflow:visible}
 .fx{position:fixed;inset:0;pointer-events:none;z-index:30;overflow:hidden}

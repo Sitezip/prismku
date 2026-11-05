@@ -1,4 +1,5 @@
 import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, gridToString } from './puzzle.js';
+import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
 import { CONFIG } from './config.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -108,6 +109,8 @@ function newGame(play, mode, seed) {
 function restore(s) {
   const p = generate(s.mode, s.seed);
   const g = { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution };
+  // Restart on a solved free-play board used to wipe the tiles and leave `done` set (ticket #6).
+  if (clearedWhileSolved(g.done, isSolved(g.grid, p.puzzle, s.mode))) g.done = false;
   // Progress saved before the anti-pause fix has no `seen` flag: any played board counts as seen.
   if (g.seen === undefined) g.seen = g.moves > 0 || g.elapsed > 0;
   // Once a board has been seen its clock never stops, even while you're away (closed tab, other board),
@@ -213,13 +216,25 @@ function render(full) {
   });
   const counts = Array(n + 1).fill(0); G.grid.forEach(v => counts[v]++);
   document.querySelectorAll('.swatch').forEach(s => {
-    const v = +s.dataset.v; s.classList.toggle('brush', v === brush); s.classList.toggle('done', counts[v] >= n);
+    const v = +s.dataset.v, armed = v === brush;
+    s.classList.toggle('brush', armed); s.classList.toggle('done', counts[v] >= n);
+    s.setAttribute('aria-pressed', armed ? 'true' : 'false');
+    s.setAttribute('aria-label', armed ? `${COLOR_NAMES[v]}, painting, tap to stop` : COLOR_NAMES[v]);
     s.querySelector('.cnt').textContent = n - counts[v];
   });
+  const stop = $('#paint-stop');
+  stop.hidden = !brush;
+  if (brush) {
+    stop.style.setProperty('--col', `var(--c${brush})`);
+    stop.textContent = `Painting ${COLOR_NAMES[brush]} — tap to stop`;
+    stop.setAttribute('aria-label', `Stop painting ${COLOR_NAMES[brush]}`);
+  }
   $('#hud-moves').textContent = G.moves; $('#hud-hints').textContent = G.hints; $('#hud-mist').textContent = G.mistakes;
   $('#hud-time').textContent = fmt(elapsed());
   $('#btn-undo').disabled = !G.hist.length || G.done;
-  $('#btn-hint').disabled = $('#btn-erase').disabled = $('#btn-notes').disabled = G.done;
+  $('#btn-hint').disabled = $('#btn-erase').disabled = $('#btn-notes').disabled = !canRestart(G.done);
+  $('#btn-restart').disabled = !canRestart(G.done);
+  $('#btn-restart').title = G.done ? 'Solved — restart is off' : 'Restart this puzzle';
   $('#btn-notes').setAttribute('aria-pressed', notesOn); $('#btn-notes').classList.toggle('on', notesOn);
   document.body.classList.toggle('notes-on', notesOn);
 }
@@ -286,9 +301,10 @@ function hint() {
 }
 
 function restart() {
-  if (G.done && G.play === 'daily') return toast('Today’s daily is solved — try Free play!');
+  // Solved boards stay filled. Clearing one without clearing `done` left a board that refused moves (ticket #6).
+  if (!canRestart(G.done)) return toast(G.play === 'daily' ? 'Today’s daily is solved — try Free play!' : 'This board is solved — tap ✨ New for another.');
   if (!confirm('Restart this puzzle? Your timer keeps running.')) return;
-  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; sel = -1;
+  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; sel = -1; brush = 0;
   render(false); persist();
 }
 
@@ -549,7 +565,7 @@ function replayDaily(day) {
 function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
-    <p>👉 Tap a tile, then tap a color. Or tap a color first to “paint” several tiles.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes.</p>
+    <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes, Esc to let go of a color.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
@@ -570,10 +586,10 @@ function feedbackContext() {
 function showFeedback(type = 'bug') {
   const ctx = feedbackContext();
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>💬 Feedback & bug reports</h3>
-    <p class="tip" style="text-align:left">Found a bug or have an idea? Tell us — every ticket is read.</p>
+    <p class="tip" style="text-align:left">Found a bug or have an idea? Every note is read. Fixes ship in the game and on the <a href="/versions/">version history</a>. Prismku does not email you back.</p>
     <div class="seg" id="fb-type" role="radiogroup" aria-label="Type">${[['bug', '🐞 Bug'], ['idea', '💡 Idea'], ['other', '✉️ Other']].map(([k, l]) => `<button type="button" role="radio" data-fbtype="${k}" class="${k === type ? 'on' : ''}" aria-checked="${k === type}">${l}</button>`).join('')}</div>
     <label class="fb-field">Message <span class="fb-count" id="fb-count">0/1000</span><textarea id="fb-msg" maxlength="1000" placeholder="What happened? What did you expect?"></textarea></label>
-    <label class="fb-field">Email (optional, only if you want a reply)<input type="email" id="fb-contact" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
+    <label class="fb-field">Email (optional — saved with the ticket, not used to send mail)<input type="email" id="fb-contact" maxlength="254" autocomplete="email" placeholder="you@example.com"></label>
     <label class="hp" aria-hidden="true">Website<input type="text" id="fb-website" tabindex="-1" autocomplete="off"></label>
     <p class="fb-ctx">Attached automatically: v${esc(ctx.version)}${ctx.mode ? ` · ${esc(MODES[ctx.mode].label)} · seed ${ctx.seed}${ctx.daily ? ' (daily)' : ''}` : ''} · ${esc(ctx.viewport)} · your browser’s user agent.</p>
     <div class="row"><button class="btn primary" data-act="fb-send" id="fb-send">Send</button><button class="btn" data-act="close">Cancel</button></div>`);
@@ -607,11 +623,28 @@ function selectCell(i) {
   sel = sel === i ? -1 : i; render(false);
 }
 $('#board-wrap').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) selectCell(+c.dataset.i); });
+function setBrush(next) {
+  const was = brush;
+  brush = next;
+  // Drop the selection when paint turns off so the next tap on that color arms it again
+  // instead of erasing the tile you just painted (ticket #7).
+  if (!brush) sel = -1;
+  render(false);
+  if (brush) toast(`Painting ${COLOR_NAMES[brush]} — tap it again to stop`, 1800);
+  else if (was) toast('Paint off', 1200);
+}
 $('#palette').addEventListener('click', e => {
-  const s = e.target.closest('.swatch'); if (!s || G.done) return; const v = +s.dataset.v;
-  if (sel >= 0 && !G.puzzle[sel]) { if (notesOn && !G.grid[sel]) toggleNote(sel, v); else place(sel, G.grid[sel] === v ? 0 : v); }
-  else { brush = brush === v ? 0 : v; render(false); if (brush) toast(`Painting ${COLOR_NAMES[v]} — tap tiles`, 1500); }
+  const s = e.target.closest('.swatch'); if (!s || !G) return;
+  const v = +s.dataset.v;
+  const act = paletteTap({
+    done: G.done, brush, sel, v,
+    given: sel >= 0 && !!G.puzzle[sel], notesOn, cellValue: sel >= 0 ? G.grid[sel] : 0,
+  });
+  if (act.type === 'brush') setBrush(act.brush);
+  else if (act.type === 'note') toggleNote(sel, act.v);
+  else if (act.type === 'place') place(sel, act.v);
 });
+$('#paint-stop').onclick = () => { if (brush) setBrush(0); };
 $('#btn-notes').onclick = () => { notesOn = !notesOn; render(false); toast(notesOn ? '✏️ Notes on — colors become pencil dots' : 'Notes off', 1500); };
 $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').onclick = restart;
 $('#btn-erase').onclick = () => { if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
