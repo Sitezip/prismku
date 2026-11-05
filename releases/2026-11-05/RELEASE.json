@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-05",
+  "title": "Let Go",
+  "notes": [
+    "Paint lets go: tap the glowing color again, or the stop bar (ticket #7)",
+    "Restart turns off once a board is solved (ticket #6)",
+    "Feedback no longer promises an email reply (ticket #5)"
+  ],
+  "frozenAt": "2026-11-05T22:07:59.231Z"
+}
