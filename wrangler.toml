@@ -30,3 +30,9 @@ crons = ["5 0 * * *"]
 
 [observability]
 enabled = true
+
+# Transactional fix notices only. Sender is locked; recipients are the address
+# stored on each ticket (arbitrary recipients need Email Sending, already on).
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = [ "noreply@prismku.com" ]

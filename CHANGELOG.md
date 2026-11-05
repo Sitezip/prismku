@@ -6,6 +6,7 @@ Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 - Fixed (ticket #7): painting with a color could stick on. After the first tile, the glowing border stayed and every touch kept placing that color, with no way out on a phone. Tap the glowing color again, or the “Painting … tap to stop” bar, to let go. Escape still clears it on a keyboard.
 - Fixed (ticket #6): Restart stayed clickable after a solve. On free play it could wipe the tiles while leaving the board finished, so moves were refused. Restart now turns off once a board is solved. A board already stuck that way loads playable again.
 - Feedback no longer promises an email reply (ticket #5). Fixes ship in the game and on the version history.
+- If a player leaves an email, marking that ticket fixed sends one short note (noreply@prismku.com) and then never again. Tickets already done before this change are not mailed.
 
 ## 2026-11-03 — "Calendar"
 - New 📅 Daily calendar (next to Free play, in the win dialog and after a solved daily): a weekday grid of every daily since launch with a colored dot for each size you solved, a glowing frame for today, and a rainbow tile when you cleared all four sizes. Shows your current and best daily streak.

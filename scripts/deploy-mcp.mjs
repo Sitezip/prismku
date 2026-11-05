@@ -54,7 +54,7 @@ const assetsCode = `async () => {
   const salt = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
   const metadata = {
     main_module: 'worker.js', compatibility_date: '2026-10-01',
-    bindings: [ { type: 'd1', name: 'DB', id: ${JSON.stringify(DB_ID)} }, { type: 'assets', name: 'ASSETS' }, { type: 'secret_text', name: 'RL_SALT', text: salt } ],
+    bindings: [ { type: 'd1', name: 'DB', id: ${JSON.stringify(DB_ID)} }, { type: 'assets', name: 'ASSETS' }, { type: 'secret_text', name: 'RL_SALT', text: salt }, { type: 'send_email', name: 'EMAIL', allowed_sender_addresses: ['noreply@prismku.com'] } ],
     assets: { jwt, config: { html_handling: 'auto-trailing-slash', not_found_handling: '404-page', run_worker_first: ['/api/*'], _headers: headersFile } },
     observability: { enabled: true },
   };
@@ -73,7 +73,7 @@ const embeddedCode = `async () => {
   const salt = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
   const metadata = {
     main_module: 'worker.js', compatibility_date: '2026-10-01',
-    bindings: [ { type: 'd1', name: 'DB', id: ${JSON.stringify(DB_ID)} }, { type: 'secret_text', name: 'RL_SALT', text: salt } ],
+    bindings: [ { type: 'd1', name: 'DB', id: ${JSON.stringify(DB_ID)} }, { type: 'secret_text', name: 'RL_SALT', text: salt }, { type: 'send_email', name: 'EMAIL', allowed_sender_addresses: ['noreply@prismku.com'] } ],
     observability: { enabled: true },
   };
   const form = new FormData();
