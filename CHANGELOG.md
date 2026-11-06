@@ -2,6 +2,12 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-06 — "Full Rainbow"
+- Clear Easy, Medium, Hard and Expert on the same daily day for a **Full Rainbow** celebration on the win screen, a rainbow share line, and a matching result-card title.
+- New 🏅 Full Rainbow achievement when the server sees all four daily sizes submitted that day.
+- Calendar shows today’s rainbow progress (n/4) and a **Share streak** button for a spoiler-free streak brag.
+- After a daily solve, the tip links the next unsolved size so you can finish the rainbow.
+
 ## 2026-11-05 — "Let Go"
 - Fixed (ticket #7): painting with a color could stick on. After the first tile, the glowing border stayed and every touch kept placing that color, with no way out on a phone. Tap the glowing color again, or the “Painting … tap to stop” bar, to let go. Escape still clears it on a keyboard.
 - Fixed (ticket #6): Restart stayed clickable after a solve. On free play it could wipe the tiles while leaving the board finished, so moves were refused. Restart now turns off once a board is solved. A board already stuck that way loads playable again.

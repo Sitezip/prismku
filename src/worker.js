@@ -18,6 +18,7 @@ const ACH = {
   streak_3: 'Hat Trick — 3-day daily streak',
   streak_7: 'Rainbow Week — 7-day daily streak',
   daily_top: 'Brightest Today — #1 on a daily leaderboard',
+  daily_rainbow: 'Full Rainbow — solved Easy, Medium, Hard and Expert on the same day',
 };
 
 const json = (data, status = 200, extra = {}) => new Response(JSON.stringify(data), {
@@ -193,6 +194,10 @@ async function submitScore(env, request) {
     want(streak >= 3, 'streak_3');
     want(streak >= 7, 'streak_7');
     if (streak > player.best_streak) await env.DB.prepare('UPDATE players SET best_streak = ? WHERE id = ?').bind(streak, player.id).run();
+    const modesToday = await env.DB.prepare(
+      'SELECT COUNT(DISTINCT mode) c FROM scores WHERE player_id = ? AND substr(daily_id, 1, 10) = ?'
+    ).bind(player.id, day).first();
+    want((modesToday?.c || 0) >= 4, 'daily_rainbow');
   }
   let dailyRank = null;
   if (dailyId && ranked) {
@@ -207,7 +212,7 @@ async function submitScore(env, request) {
     res.forEach((r, i) => { if (r.meta.changes) newly.push(earned[i]); });
   }
   const hl = [];
-  for (const c of newly) if (['expert_solve', 'flawless', 'streak_7', 'fifty_games', 'daily_top', 'speed_hard'].includes(c)) hl.push(['achievement', `${player.nickname} earned “${ACH[c].split(' — ')[0]}”`]);
+  for (const c of newly) if (['expert_solve', 'flawless', 'streak_7', 'fifty_games', 'daily_top', 'speed_hard', 'daily_rainbow'].includes(c)) hl.push(['achievement', `${player.nickname} earned “${ACH[c].split(' — ')[0]}”`]);
   const best = await env.DB.prepare('SELECT MAX(score) m FROM scores WHERE mode = ? AND ranked = 1 AND id != ?').bind(b.mode, ins.id).first();
   const allTimeRecord = !!ranked && (!best.m || score > best.m);
   if (allTimeRecord) hl.push(['record', `${player.nickname} set a new ${mode.label} record: ${score} pts`]);

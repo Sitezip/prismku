@@ -1,6 +1,7 @@
 import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, gridToString } from './puzzle.js';
 import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
 import { CONFIG } from './config.js';
+import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const ARCHIVE = /^\/v\/\d{4}-\d{2}-\d{2}\//.test(location.pathname);
@@ -322,7 +323,12 @@ function shareGrid() {
 function shareText() {
   const m = MODES[G.mode], r = G.result || {};
   const head = G.play === 'daily' ? `Prismku #${G.number} 🌈 ${m.label} ${m.size}×${m.size}` : G.replay ? `Prismku #${dayNumber(G.replay)} (replay) 🌈 ${m.label} ${m.size}×${m.size}` : `Prismku 🌈 ${m.label} ${m.size}×${m.size}`;
-  return `${head}\n⏱ ${fmt(G.elapsed)} · 💡${G.hints} · ⚡${G.mistakes}${r.score ? ` · ${r.score} pts` : ''}\n${shareGrid()}${CONFIG.siteUrl.replace('https://', '')}`;
+  let out = `${head}\n⏱ ${fmt(G.elapsed)} · 💡${G.hints} · ⚡${G.mistakes}${r.score ? ` · ${r.score} pts` : ''}\n${shareGrid()}`;
+  if (G.play === 'daily') {
+    const line = rainbowShareLine(modesCleared(store.get('dailies', {}), G.day));
+    if (line) out += line + '\n';
+  }
+  return out + CONFIG.siteUrl.replace('https://', '');
 }
 
 function confetti() {
@@ -350,7 +356,11 @@ async function win() {
   const pb = score > b.score;
   bests[G.mode] = { score: Math.max(b.score, score), fastest: b.fastest ? Math.min(b.fastest, G.elapsed) : G.elapsed, solved: b.solved + 1 };
   store.set('bests', bests);
-  if (G.play === 'daily') { const d = store.get('dailies', {}); d[`${G.day}:${G.mode}`] = { score, t: G.elapsed }; store.set('dailies', d); }
+  if (G.play === 'daily') {
+    const d = store.get('dailies', {}); d[`${G.day}:${G.mode}`] = { score, t: G.elapsed }; store.set('dailies', d);
+    G.result.fullRainbow = isFullRainbow(d, G.day);
+    G.result.rainbowCleared = modesCleared(d, G.day).length;
+  }
   if (G.replay) { const d = store.get('replays', {}); d[`${G.replay}:${G.mode}`] = { score, t: G.elapsed }; store.set('replays', d); }
   G.result.personalBest = pb;
   persist();
@@ -396,11 +406,22 @@ function winExtra() {
 
 function showWin() {
   const m = MODES[G.mode], r = G.result || {};
+  const full = !!r.fullRainbow;
+  const title = full ? `🌈 Full Rainbow! Daily #${G.number}`
+    : G.play === 'daily' ? `Daily #${G.number} solved! 🌈`
+    : G.replay ? `Daily #${dayNumber(G.replay)} replay solved! 🌈`
+    : 'Solved! 🌈';
+  const rainbowNote = full
+    ? '<p class="rainbow-banner">You cleared Easy · Medium · Hard · Expert today. Share it!</p>'
+    : (G.play === 'daily' && r.rainbowCleared
+      ? `<p style="text-align:center">🌈 ${r.rainbowCleared}/4 sizes today${nextRainbowMode(store.get('dailies', {}), G.day) ? ' — keep going!' : ''}</p>`
+      : '');
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button>
-    <h3>${G.play === 'daily' ? `Daily #${G.number} solved!` : G.replay ? `Daily #${dayNumber(G.replay)} replay solved!` : 'Solved!'} 🌈</h3>
-    <div class="big">${r.score} pts</div>
+    <h3 class="${full ? 'rainbow-title' : ''}">${title}</h3>
+    <div class="big${full ? ' rainbow' : ''}">${r.score} pts</div>
     <div class="kv"><div><b>${fmt(G.elapsed)}</b>time</div><div><b>${G.moves}</b>moves</div><div><b>${G.hints}</b>hints</div><div><b>${G.mistakes}</b>clashes</div></div>
     ${r.personalBest ? `<p style="text-align:center">⭐ Personal best for ${m.label}!</p>` : ''}
+    ${rainbowNote}
     <div id="win-extra">${winExtra()}</div>
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
@@ -411,7 +432,17 @@ function showWin() {
 }
 
 function showDoneState() {
-  $('#tip').innerHTML = G.play === 'daily' ? `Solved in ${fmt(G.elapsed)} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a> · <a href="#" data-act="calendar">📅 Past dailies</a>` : G.replay ? 'Replay solved! <a href="#" data-act="calendar">📅 Pick another day</a> or tap ✨ New.' : 'Solved! Tap ✨ New for another.';
+  if (G.play === 'daily') {
+    const d = store.get('dailies', {}), n = modesCleared(d, G.day).length, next = nextRainbowMode(d, G.day);
+    const rainbow = isFullRainbow(d, G.day)
+      ? '🌈 Full Rainbow today!'
+      : next ? `🌈 ${n}/4 — try <a href="#" data-act="next-mode" data-mode="${next}">${MODES[next].label}</a> next` : '';
+    $('#tip').innerHTML = `Solved in ${fmt(G.elapsed)}${rainbow ? ' · ' + rainbow : ''} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a> · <a href="#" data-act="calendar">📅 Past dailies</a>`;
+  } else if (G.replay) {
+    $('#tip').innerHTML = 'Replay solved! <a href="#" data-act="calendar">📅 Pick another day</a> or tap ✨ New.';
+  } else {
+    $('#tip').innerHTML = 'Solved! Tap ✨ New for another.';
+  }
   updateCountdown();
 }
 function updateCountdown() {
@@ -457,7 +488,12 @@ function resultCard() {
   x.strokeStyle = rb; x.lineWidth = 16; x.strokeRect(8, 8, S - 16, S - 16);
   x.textAlign = 'center'; x.fillStyle = rb; x.font = font(800, 92); x.fillText('Prismku', S / 2, 130);
   x.fillStyle = '#f6f1ff'; x.font = font(600, 44);
-  x.fillText(G.play === 'daily' ? `Daily #${G.number} · ${m.label} ${n}×${n}` : G.replay ? `Daily #${dayNumber(G.replay)} replay · ${m.label} ${n}×${n}` : `${m.label} ${n}×${n} · Free play`, S / 2, 200);
+  const cardSub = (G.play === 'daily' && G.result?.fullRainbow)
+    ? `Daily #${G.number} · Full Rainbow 🌈`
+    : G.play === 'daily' ? `Daily #${G.number} · ${m.label} ${n}×${n}`
+    : G.replay ? `Daily #${dayNumber(G.replay)} replay · ${m.label} ${n}×${n}`
+    : `${m.label} ${n}×${n} · Free play`;
+  x.fillText(cardSub, S / 2, 200);
   // spoiler-free board: tile state only (given / solved first try / fixed / hint), tinted along a rainbow diagonal
   const B = 600, ox = (S - B) / 2, oy = 240, cell = B / n, gap = Math.max(4, cell * 0.08);
   for (let rr = 0; rr < n; rr++) for (let c = 0; c < n; c++) {
@@ -548,11 +584,14 @@ function showCalendar() {
     const n = MODE_KEYS.filter(k => dailies[`${d}:${k}`]).length;
     cells += `<button class="cal-day${d === serverDay ? ' today' : ''}${n === MODE_KEYS.length ? ' full' : ''}" data-calday="${d}" aria-label="Daily #${dayNumber(d)}, ${d}: ${n} of ${MODE_KEYS.length} solved"><b>${+d.slice(8)}</b><small>#${dayNumber(d)}</small><span class="cal-dots">${dots}</span></button>`;
   }
+  const todayCleared = modesCleared(dailies, serverDay);
+  const todayRainbow = isFullRainbow(dailies, serverDay);
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>📅 Daily calendar</h3>
-    <p class="cal-streak">🔥 Streak <b>${cur}</b> day${cur === 1 ? '' : 's'} · ✨ Best <b>${best}</b></p>
+    <p class="cal-streak">🔥 Streak <b>${cur}</b> day${cur === 1 ? '' : 's'} · ✨ Best <b>${best}</b>${todayRainbow ? ' · 🌈 Full Rainbow today' : todayCleared.length ? ` · 🌈 ${todayCleared.length}/4 today` : ''}</p>
     <div class="cal-head">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(w => `<span>${w}</span>`).join('')}</div>
     <div class="cal-grid">${cells}</div>
-    <p class="tip">Dots show which sizes you solved: <span class="cal-key"><i class="on" style="--col:var(--c1)"></i>Easy <i class="on" style="--col:var(--c6)"></i>Medium <i class="on" style="--col:var(--c4)"></i>Hard <i class="on" style="--col:var(--c2)"></i>Expert</span>. Hollow dots are replays. Tap a past day to replay its ${esc(MODES[G.mode].label)} puzzle as practice (free-play scoring; only today’s daily counts for streaks and daily ranks).</p>`);
+    <p class="tip">Dots show which sizes you solved: <span class="cal-key"><i class="on" style="--col:var(--c1)"></i>Easy <i class="on" style="--col:var(--c6)"></i>Medium <i class="on" style="--col:var(--c4)"></i>Hard <i class="on" style="--col:var(--c2)"></i>Expert</span>. Hollow dots are replays. Tap a past day to replay its ${esc(MODES[G.mode].label)} puzzle as practice (free-play scoring; only today’s daily counts for streaks and daily ranks). Clear all four sizes for a <b>Full Rainbow</b>.</p>
+    <div class="row"><button class="btn primary" data-act="share-streak">Share streak</button><button class="btn" data-act="close">Close</button></div>`);
 }
 function replayDaily(day) {
   if (day >= serverDay) { closeDlg(); return startMode('daily', G.mode); }
@@ -562,6 +601,19 @@ function replayDaily(day) {
   if (!G.done) $('#tip').innerHTML = `📅 Replaying Daily #${dayNumber(day)} (${day}) · ${esc(MODES[G.mode].label)} — practice, free-play scoring.`;
 }
 
+
+async function shareStreak() {
+  const dailies = store.get('dailies', {});
+  const solved = new Set(Object.keys(dailies).map(k => k.split(':')[0]));
+  const { cur, best } = streaks(solved, serverDay);
+  const text = streakShareText({ number: dayNumber(serverDay), cur, best, siteUrl: CONFIG.siteUrl });
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+  }
+  if (await copyText(text)) { flashBtn('share-streak', '✓ Copied!'); toast('Streak copied — paste it anywhere!'); }
+  else toast('Could not copy — long-press to select');
+}
+
 function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
@@ -569,7 +621,7 @@ function showHelp() {
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
-    <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed.</p>
+    <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> — then share your streak.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
     <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
     <div class="row"><button class="btn primary" data-act="close">Let’s play</button></div>`);
@@ -680,6 +732,7 @@ $('#dlg').addEventListener('click', async e => {
   if (cd) return replayDaily(cd.dataset.calday);
   if (a === 'calendar') return showCalendar();
   if (a === 'share') share();
+  if (a === 'share-streak') shareStreak();
   if (a === 'share-img') shareImage();
   if (a === 'feedback') showFeedback();
   if (a === 'fb-send') sendFeedback();
@@ -749,5 +802,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, streaks, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
 })();
