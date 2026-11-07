@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-07 — "Fill Notes"
+- New ✨ **Fill all notes** button (keyboard F), shown while ✏️ Notes is on: pencils every color that still fits each empty tile, so big boards start with candidates instead of 50 manual taps. Then erase or place as you solve; placing a color still clears its dot from the row, column and box. No score penalty, since notes are never scored.
+- How to play guide gains a “start big boards with Fill all notes” strategy tip.
+- No new player tickets today; all earlier tickets are closed.
+
 ## 2026-11-06 — "Full Rainbow"
 - Clear Easy, Medium, Hard and Expert on the same daily day for a **Full Rainbow** celebration on the win screen, a rainbow share line, and a matching result-card title.
 - New 🏅 Full Rainbow achievement when the server sees all four daily sizes submitted that day.

@@ -1,6 +1,7 @@
 import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, gridToString } from './puzzle.js';
 import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
 import { CONFIG } from './config.js';
+import { fillNotes } from './notes.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -238,6 +239,7 @@ function render(full) {
   $('#btn-restart').title = G.done ? 'Solved — restart is off' : 'Restart this puzzle';
   $('#btn-notes').setAttribute('aria-pressed', notesOn); $('#btn-notes').classList.toggle('on', notesOn);
   document.body.classList.toggle('notes-on', notesOn);
+  $('#btn-autonotes').hidden = !notesOn || !canRestart(G.done);
 }
 
 function noteDots(mask, n) {
@@ -255,6 +257,14 @@ function clearPeerNotes(i, v) {
   if (!G.notes) return; const bit = 1 << v;
   for (const p of peers(G.mode)[i]) G.notes[p] &= ~bit;
   G.notes[i] = 0;
+}
+
+// ✨ Fill all notes: pencil every color that still fits each empty tile (no penalty; notes aren't scored).
+function autoNotes() {
+  if (G.done) return;
+  const r = fillNotes(G.grid, G.notes, peers(G.mode), MODES[G.mode].size);
+  G.notes = r.notes; sfx.hint(); render(false); persist();
+  toast(r.changed ? '✨ Notes filled — every color that still fits each tile' : 'Notes are already up to date', 1800);
 }
 
 function place(i, v) {
@@ -618,7 +628,7 @@ function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
     <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes, Esc to let go of a color.</p>
-    <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.)</p>
+    <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
     <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> — then share your streak.</p>
@@ -700,6 +710,7 @@ $('#palette').addEventListener('click', e => {
   else if (act.type === 'place') place(sel, act.v);
 });
 $('#paint-stop').onclick = () => { if (brush) setBrush(0); };
+$('#btn-autonotes').onclick = () => autoNotes();
 $('#btn-notes').onclick = () => { notesOn = !notesOn; render(false); toast(notesOn ? '✏️ Notes on — colors become pencil dots' : 'Notes off', 1500); };
 $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').onclick = restart;
 $('#btn-erase').onclick = () => { if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
@@ -760,6 +771,7 @@ document.addEventListener('keydown', e => {
   } else if (/^[1-9]$/.test(k) && +k <= n) { if (sel >= 0) { if ((notesOn || e.shiftKey) && !G.grid[sel]) toggleNote(sel, +k); else place(sel, +k); } }
   else if (/^Digit[1-9]$/.test(e.code) && e.shiftKey && +e.code.slice(5) <= n) { if (sel >= 0 && !G.grid[sel]) toggleNote(sel, +e.code.slice(5)); }
   else if (k.toLowerCase() === 'n') $('#btn-notes').click();
+  else if (k.toLowerCase() === 'f' && notesOn) autoNotes();
   else if (k === 'Backspace' || k === 'Delete' || k === '0') { if (sel >= 0) place(sel, 0); }
   else if (k.toLowerCase() === 'z') undo();
   else if (k.toLowerCase() === 'h') hint();

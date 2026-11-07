@@ -171,3 +171,5 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 .big.rainbow{background:linear-gradient(90deg,var(--c1),var(--c6),var(--c3),var(--c4),var(--c2),var(--c7));-webkit-background-clip:text;background-clip:text;color:transparent}
 .rainbow-banner{text-align:center;margin:6px 0 10px;padding:8px 12px;border-radius:12px;border:1px solid color-mix(in srgb,var(--c3) 50%,transparent);
   background:linear-gradient(135deg,color-mix(in srgb,var(--c1) 25%,transparent),color-mix(in srgb,var(--c4) 25%,transparent),color-mix(in srgb,var(--c2) 25%,transparent));font-weight:600}
+.autonotes{margin:8px auto 0;display:block;border:1px dashed var(--accent);background:var(--panel);color:var(--accent);padding:6px 14px;border-radius:999px;font-size:13px}
+.autonotes[hidden]{display:none}
