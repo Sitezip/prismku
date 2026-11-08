@@ -58,6 +58,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes clash{50%{box-shadow:0 0 0 3px var(--bad), 0 0 20px var(--bad)}}
 .cell.twinkle{animation:twinkle .8s}
 @keyframes twinkle{40%{filter:brightness(1.6) saturate(1.3)}}
+.cell.why{box-shadow:inset 0 0 0 3px #ffd60a,0 0 14px rgba(255,214,10,.65);animation:whyglow 1.1s ease-in-out infinite alternate}
+@keyframes whyglow{from{filter:brightness(1)}to{filter:brightness(1.35)}}
+@media (prefers-reduced-motion:reduce){.cell.why{animation:none}}
 .cell.hinted{outline:2px dashed rgba(255,255,255,.7);outline-offset:-5px}
 .cell svg{width:46%;height:46%;opacity:0;transition:opacity .2s;fill:rgba(0,0,0,.45)}
 body.cb .cell.filled svg{opacity:1}

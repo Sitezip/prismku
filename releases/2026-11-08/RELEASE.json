@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-08",
+  "title": "Why Hints",
+  "notes": [
+    "💡 Hints explain the logic: only color that fits, or only spot in a row, column or box, with proof tiles glowing",
+    "Offline play caches every game module",
+    "How to play guide describes explained hints"
+  ],
+  "frozenAt": "2026-11-08T19:07:50.767Z"
+}

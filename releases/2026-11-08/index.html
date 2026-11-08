@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prismku — Rainbow Sudoku · a daily color logic puzzle</title>
+<meta name="description" content="Prismku is Rainbow Sudoku: fill the grid with vibrant colors so no color repeats in any row, column or box. Free daily puzzle, 4×4 to 9×9, leaderboards, colorblind mode. Play in your browser.">
+<meta name="theme-color" content="#120b2e">
+<link rel="canonical" href="https://prismku.com/">
+<link rel="icon" href="./img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="./img/apple-touch-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Prismku">
+<meta property="og:title" content="Prismku — Rainbow Sudoku">
+<meta property="og:description" content="A colorful twist on a classic: arrange hues so no color repeats in any row or column. New daily puzzle for everyone.">
+<meta property="og:url" content="https://prismku.com/">
+<meta property="og:image" content="https://prismku.com/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Prismku — Rainbow Sudoku">
+<meta name="twitter:description" content="Sudoku with colors instead of numbers. One shared daily puzzle. Can you beat today’s board?">
+<meta name="twitter:image" content="https://prismku.com/img/og.png">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"VideoGame","name":"Prismku — Rainbow Sudoku","url":"https://prismku.com/","image":"https://prismku.com/img/og.png","description":"A daily color logic puzzle: Sudoku with colors instead of numbers.","genre":["Puzzle","Logic"],"gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+</script>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="bg-pattern" aria-hidden="true"></div>
+<div id="archive-banner" class="archive-banner" hidden></div>
+<header class="top">
+  <a class="brand" href="./" aria-label="Prismku home">
+    <img src="./img/logo.svg" alt="" width="40" height="40">
+    <span class="brand-text"><b>Prismku</b><small>Rainbow Sudoku</small></span>
+  </a>
+  <nav class="top-actions">
+    <button class="icon-btn" id="btn-sound" aria-label="Toggle sound" title="Sound">🔊</button>
+    <button class="icon-btn" id="btn-cb" aria-label="Toggle colorblind symbols" title="Colorblind symbols">◐</button>
+    <button class="icon-btn" id="btn-board" aria-label="Leaderboards" title="Leaderboards">🏆</button>
+    <button class="icon-btn" id="btn-me" aria-label="Your stats" title="Your stats">👤</button>
+    <button class="icon-btn" id="btn-help" aria-label="How to play" title="How to play">?</button>
+    <button class="icon-btn" id="btn-feedback" aria-label="Send feedback or report a bug" title="Feedback">💬</button>
+  </nav>
+</header>
+
+<main class="game" id="game">
+  <div class="mode-row">
+    <div class="seg" role="tablist" aria-label="Play type">
+      <button role="tab" data-play="daily" class="on">Daily <span id="daily-no"></span></button>
+      <button role="tab" data-play="free">Free play</button>
+      <button data-act="calendar" id="btn-cal" aria-label="Daily calendar and past dailies" title="Daily calendar">📅</button>
+    </div>
+    <div class="seg diff" role="tablist" aria-label="Difficulty" id="diff"></div>
+  </div>
+
+  <div class="hud">
+    <div><span class="lbl">Time</span><b id="hud-time">0:00</b></div>
+    <div><span class="lbl">Moves</span><b id="hud-moves">0</b></div>
+    <div><span class="lbl">Hints</span><b id="hud-hints">0</b></div>
+    <div><span class="lbl">Clashes</span><b id="hud-mist">0</b></div>
+  </div>
+
+  <button type="button" id="paint-stop" class="paint-stop" hidden>Painting — tap to stop</button>
+
+  <div class="board-wrap" id="board-wrap">
+    <div class="board" id="board" role="grid" aria-label="Color grid"></div>
+    <div class="pause-veil" id="pause-veil" hidden><button id="btn-resume">▶ Resume</button></div>
+  </div>
+
+  <div class="palette" id="palette" aria-label="Colors"></div>
+
+  <div class="controls">
+    <button id="btn-notes" aria-pressed="false" title="Pencil marks (N)">✏️ Notes</button>
+    <button id="btn-undo">↶ Undo</button>
+    <button id="btn-erase">⌫ Erase</button>
+    <button id="btn-hint">💡 Hint</button>
+    <button id="btn-restart">⟲ Restart</button>
+    <button id="btn-new" hidden>✨ New</button>
+  </div>
+  <button type="button" id="btn-autonotes" class="autonotes" hidden title="Pencil every color that still fits (F)">✨ Fill all notes</button>
+  <p class="tip" id="tip">Tap a tile, then a color. No color may repeat in a row, column or bold box.</p>
+
+  <aside class="slot ad-slot" id="ad-slot" hidden aria-label="Advertisement"></aside>
+  <aside class="slot tip-slot" id="tip-slot" hidden></aside>
+
+  <section class="community" id="community">
+    <h2>Today on Prismku</h2>
+    <div class="stat-row" id="community-stats"></div>
+    <ul class="highlights" id="highlights"></ul>
+  </section>
+
+  <section class="howto" id="howto">
+    <h2>How to play Rainbow Sudoku</h2>
+    <p>Prismku is Sudoku with colors instead of numbers. Fill every empty tile so that <b>no color repeats in any row or column</b> — and on Easy, Hard and Expert boards, not inside any bold box either.</p>
+    <ul>
+      <li><b>Easy 4×4</b> — four colors, 2×2 boxes. Perfect warm-up.</li>
+      <li><b>Medium 5×5</b> — a pure Latin square: rows and columns only.</li>
+      <li><b>Hard 6×6</b> — six colors with 2×3 boxes.</li>
+      <li><b>Expert 9×9</b> — the full spectrum, classic Sudoku rules.</li>
+    </ul>
+    <p>Every puzzle has exactly one solution and can be solved with logic alone. The <b>Daily</b> puzzle is the same for everyone in the world — solve it, compare your time on the leaderboard, and share your result grid without spoilers. Turn on <b>◐ colorblind mode</b> to add a symbol to every color.</p>
+    <p>Scoring: faster solves score higher; each hint costs 15 seconds and each clash 3 seconds.</p>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>© 2026 Prismku · <a href="/how-to-play/">How to play</a> · <a href="/versions/">Version history</a> · <a href="#feedback" data-act="feedback">Feedback &amp; bugs</a> · <span id="ver"></span></span>
+  <span>No sign-up, no tracking cookies. Nicknames are public on leaderboards.</span>
+</footer>
+
+<dialog id="dlg" class="dlg"><div class="dlg-body" id="dlg-body"></div></dialog>
+<div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
+<div id="fx" class="fx" aria-hidden="true"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

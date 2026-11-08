@@ -2,6 +2,12 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-08 — "Why Hints"
+- 💡 Hints now explain themselves. Instead of just revealing a tile, a hint finds the next move plain logic can prove and says why: either that color is the only one that fits (the tiles holding every other color glow), or it's the only spot left for that color in a row, column or box (that line glows). Each hint teaches a move you can spot yourself next time. Wrong tiles are still fixed first, and hints still cost +15s.
+- Offline play now caches every game module, not just the core ones.
+- How to play guide describes explained hints.
+- No new player tickets today; all earlier tickets are closed.
+
 ## 2026-11-07 — "Fill Notes"
 - New ✨ **Fill all notes** button (keyboard F), shown while ✏️ Notes is on: pencils every color that still fits each empty tile, so big boards start with candidates instead of 50 manual taps. Then erase or place as you solve; placing a color still clears its dot from the row, column and box. No score penalty, since notes are never scored.
 - How to play guide gains a “start big boards with Fill all notes” strategy tip.

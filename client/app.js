@@ -2,6 +2,7 @@ import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, daily
 import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
 import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
+import { nextStep, explain } from './logic.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -87,6 +88,7 @@ let brush = 0;         // armed color
 let notesOn = false;   // pencil-mark mode
 let serverDay = utcDay();
 let tick = null;
+let whyTiles = new Set(), whyFor = null; // tiles glowing to explain the last hint
 const dlgState = {}; // UI state for the open dialog (kept off DOM attributes so closest() never matches the dialog)
 
 function progressKey(play, mode, day) { return play === 'daily' ? `prog.daily.${day}.${mode}` : `prog.free.${mode}`; }
@@ -208,7 +210,7 @@ function render(full) {
   const cells = board.querySelectorAll('.cell');
   cells.forEach((c, i) => {
     const v = G.grid[i], given = !!G.puzzle[i];
-    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '');
+    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '');
     if (v) c.style.setProperty('--col', `var(--c${v})`); else c.style.removeProperty('--col');
     const nm = !v && G.notes ? G.notes[i] : 0;
     c.classList.toggle('noted', !!nm);
@@ -298,8 +300,10 @@ function hint() {
   let target = -1;
   if (sel >= 0 && !G.puzzle[sel] && G.grid[sel] !== G.solution[sel]) target = sel;
   if (target < 0) { const wrong = [...Array(n).keys()].filter(i => G.grid[i] && G.grid[i] !== G.solution[i]); if (wrong.length) target = wrong[0]; }
+  let step = null;
+  if (target < 0) { step = nextStep(G.grid, G.mode); if (step) target = step.i; }
   if (target < 0) {
-    // pick the empty cell with the fewest candidates (most "logical" next step)
+    // no single to explain: pick the empty cell with the fewest candidates
     const P = peers(G.mode); let best = 99;
     for (let i = 0; i < n; i++) if (!G.grid[i]) { const used = new Set(P[i].map(p => G.grid[p]).filter(Boolean)); const c = MODES[G.mode].size - used.size; if (c < best) { best = c; target = i; } }
   }
@@ -307,7 +311,13 @@ function hint() {
   G.hist.push({ i: target, prev: G.grid[target], places: G.places[target], hinted: G.hinted[target] });
   G.grid[target] = G.solution[target]; clearPeerNotes(target, G.solution[target]); G.hinted[target] = true; G.hints++; G.moves++; sel = target;
   sfx.hint(); render(false); persist();
-  toast(`Hint: that tile is ${COLOR_NAMES[G.solution[target]]} (+15s)`);
+  if (step) {
+    // Explained hint: glow the tiles that prove it for a few seconds.
+    whyFor = G; whyTiles = new Set(step.kind === 'only-color' ? step.why : step.unit.cells.filter(i => i !== target));
+    clearTimeout(hint.t); hint.t = setTimeout(() => { whyTiles = new Set(); if (G) render(false); }, 4200);
+    render(false);
+    toast(`💡 ${explain(step, COLOR_NAMES, !!MODES[G.mode].box)} (+15s)`, 4200);
+  } else toast(`Hint: that tile is ${COLOR_NAMES[G.solution[target]]} (+15s)`);
   if (isSolved(G.grid, G.puzzle, G.mode)) win();
 }
 
@@ -627,7 +637,7 @@ async function shareStreak() {
 function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
-    <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint, N for notes, Esc to let go of a color.</p>
+    <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint (it explains why), N for notes, Esc to let go of a color.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
