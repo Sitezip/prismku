@@ -176,3 +176,14 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
   background:linear-gradient(135deg,color-mix(in srgb,var(--c1) 25%,transparent),color-mix(in srgb,var(--c4) 25%,transparent),color-mix(in srgb,var(--c2) 25%,transparent));font-weight:600}
 .autonotes{margin:8px auto 0;display:block;border:1px dashed var(--accent);background:var(--panel);color:var(--accent);padding:6px 14px;border-radius:999px;font-size:13px}
 .autonotes[hidden]{display:none}
+/* 2026-11-09 Beat Your Best: pace vs. personal best in the Time box */
+.hud .lbl .pb{display:block;font-style:normal;font-size:9px;line-height:1.1;letter-spacing:.3px;text-transform:none;opacity:.85;white-space:nowrap}.hud .lbl .pb:empty{display:none}
+.hud-time-box{transition:border-color .3s,box-shadow .3s}
+.hud-time-box[data-pace="ahead"]{border-color:var(--c4);box-shadow:0 0 8px -2px var(--c4)}
+.hud-time-box[data-pace="ahead"] b{color:var(--c4)}
+.hud-time-box[data-pace="close"]{border-color:var(--c3);box-shadow:0 0 10px -1px var(--c3);animation:pkpulse 1s ease-in-out infinite alternate}
+.hud-time-box[data-pace="close"] b{color:var(--c3)}
+.hud-time-box[data-pace="behind"] b{opacity:.75}
+@keyframes pkpulse{to{box-shadow:0 0 16px 1px var(--c3)}}
+@media (prefers-reduced-motion:reduce){.hud-time-box[data-pace="close"]{animation:none}}
+.pb-beat{text-align:center;margin:.2em 0}

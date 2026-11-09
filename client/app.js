@@ -3,6 +3,7 @@ import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
 import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
 import { nextStep, explain } from './logic.js';
+import { paceState, beatBy } from './pace.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -156,11 +157,21 @@ function setHold(reason, on) {
   if (G) G.startedAt = performance.now();
   if (was !== running()) updatePaused();
 }
-function updatePaused() { document.body.classList.toggle('paused', !!G && !G.done && !running()); if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); checkSeen(); }
+function updatePaused() { document.body.classList.toggle('paused', !!G && !G.done && !running()); if (G && !G.done) showTime(); checkSeen(); }
 function elapsed() { return G.done ? G.elapsed : G.elapsed + (running() ? performance.now() - G.startedAt : 0); }
+// Beat your best (2026-11-09): the Time box shows your fastest solve for this size and glows while you're on pace.
+function showTime() {
+  const t = elapsed(), best = (store.get('bests', {})[G.mode] || {}).fastest;
+  const el = $('#hud-time'), box = el.parentElement, pb = $('#hud-pb');
+  el.textContent = fmt(t);
+  const st = G.done ? 'none' : paceState(t, best);
+  box.dataset.pace = st;
+  if (pb) pb.textContent = best ? `PB ${fmt(best)}` : '';
+  box.title = best ? `Your best ${MODES[G.mode].label} time: ${fmt(best)}${st === 'behind' ? ' (keep going!)' : ''}` : 'Solve once to set a personal best';
+}
 function startTimer() {
   clearInterval(tick);
-  tick = setInterval(() => { if (G && !G.done) $('#hud-time').textContent = fmt(elapsed()); }, 250);
+  tick = setInterval(() => { if (G && !G.done) showTime(); }, 250);
 }
 document.addEventListener('visibilitychange', () => { setHold('hidden', document.hidden); if (document.hidden) persist(); });
 window.addEventListener('pagehide', persist);
@@ -234,7 +245,7 @@ function render(full) {
     stop.setAttribute('aria-label', `Stop painting ${COLOR_NAMES[brush]}`);
   }
   $('#hud-moves').textContent = G.moves; $('#hud-hints').textContent = G.hints; $('#hud-mist').textContent = G.mistakes;
-  $('#hud-time').textContent = fmt(elapsed());
+  showTime();
   $('#btn-undo').disabled = !G.hist.length || G.done;
   $('#btn-hint').disabled = $('#btn-erase').disabled = $('#btn-notes').disabled = !canRestart(G.done);
   $('#btn-restart').disabled = !canRestart(G.done);
@@ -374,6 +385,7 @@ async function win() {
   const bests = store.get('bests', {});
   const b = bests[G.mode] || { score: 0, fastest: null, solved: 0 };
   const pb = score > b.score;
+  G.result.beatBy = beatBy(G.elapsed, b.fastest);
   bests[G.mode] = { score: Math.max(b.score, score), fastest: b.fastest ? Math.min(b.fastest, G.elapsed) : G.elapsed, solved: b.solved + 1 };
   store.set('bests', bests);
   if (G.play === 'daily') {
@@ -441,6 +453,7 @@ function showWin() {
     <div class="big${full ? ' rainbow' : ''}">${r.score} pts</div>
     <div class="kv"><div><b>${fmt(G.elapsed)}</b>time</div><div><b>${G.moves}</b>moves</div><div><b>${G.hints}</b>hints</div><div><b>${G.mistakes}</b>clashes</div></div>
     ${r.personalBest ? `<p style="text-align:center">⭐ Personal best for ${m.label}!</p>` : ''}
+    ${r.beatBy ? `<p class="pb-beat">⏱️ Fastest ${m.label} yet, ${fmt(r.beatBy)} quicker than your old best.</p>` : ''}
     ${rainbowNote}
     <div id="win-extra">${winExtra()}</div>
     <pre class="share-pre">${esc(shareText())}</pre>
@@ -639,6 +652,7 @@ function showHelp() {
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
     <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint (it explains why), N for notes, Esc to let go of a color.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
+    <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
     <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> — then share your streak.</p>
