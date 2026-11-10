@@ -1,6 +1,6 @@
 // Feature flags & monetization hooks. Everything is OFF until Jake provides accounts.
 export const CONFIG = {
-  version: '2026-11-09',
+  version: '2026-11-10',
   siteUrl: 'https://prismku.com',
   launchDay: '2026-10-31',
   ads: { enabled: false, provider: null, slotId: null },       // e.g. { enabled: true, provider: 'adsense', client: 'ca-pub-…', slotId: '…' }

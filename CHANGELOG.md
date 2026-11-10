@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-10 — "Spotlight"
+- 🔦 Color spotlight. Pick a color in the palette, or tap a tile that already has one, and every tile of that color gets a ring while the empty tiles it can't go in (because their row, column or box already has it) fade out. The empty tiles that stay bright, tinted in that color, are the only places it can still go. A lone bright tile in a line is a sure move. It turns off when you let go of the color or solve the board.
+- How to play guide and in-game help explain the spotlight.
+- Ticket triage was skipped today because the database connection needs to be reconnected; no tickets were changed.
+
 ## 2026-11-09 — "Beat Your Best"
 - ⏱️ Race your own record. Once you've solved a size, the Time box shows your personal best (PB) for it and glows green while you're ahead of it, then pulses gold in the final stretch (the last 15% or 15 seconds). Fall behind and it dims, but the PB stays there to chase next time.
 - Beat your fastest time and the win screen says by how much ("⏱️ Fastest Hard yet, 0:12 quicker than your old best").

@@ -187,3 +187,10 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 @keyframes pkpulse{to{box-shadow:0 0 16px 1px var(--c3)}}
 @media (prefers-reduced-motion:reduce){.hud-time-box[data-pace="close"]{animation:none}}
 .pb-beat{text-align:center;margin:.2em 0}
+
+/* 2026-11-10 Spotlight: focus color rings its tiles, dims empty tiles where it can't go. */
+.board.spot .cell.same{box-shadow:inset 0 0 0 3px #fff,0 0 12px var(--spot)}
+.board.spot .cell.same.sel{box-shadow:0 0 0 3px #fff,0 0 18px #fff}
+.board.spot .cell.blocked{opacity:.38}
+.board.spot .cell.open{background:color-mix(in srgb, var(--spot) 16%, rgba(255,255,255,.06))}
+.board.spot .cell.open.sel{background:color-mix(in srgb, var(--spot) 26%, rgba(255,255,255,.08))}

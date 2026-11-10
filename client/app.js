@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
 import { nextStep, explain } from './logic.js';
 import { paceState, beatBy } from './pace.js';
+import { spotlight, focusColor } from './spotlight.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -218,10 +219,15 @@ function render(full) {
   }
   const bad = conflicts(G.grid, G.mode), P = peers(G.mode);
   const peerSet = new Set(sel >= 0 ? P[sel] : []);
+  // Spotlight: the color in focus rings its tiles and dims the empty tiles it can't go in.
+  const focus = G.done ? 0 : focusColor(brush, G.grid, sel);
+  const spot = spotlight(G.grid, P, focus);
+  board.classList.toggle('spot', !!focus);
+  if (focus) board.style.setProperty('--spot', `var(--c${focus})`); else board.style.removeProperty('--spot');
   const cells = board.querySelectorAll('.cell');
   cells.forEach((c, i) => {
     const v = G.grid[i], given = !!G.puzzle[i];
-    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '');
+    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '') + (spot.same.has(i) ? ' same' : '') + (spot.blocked.has(i) ? ' blocked' : '') + (spot.open.has(i) ? ' open' : '');
     if (v) c.style.setProperty('--col', `var(--c${v})`); else c.style.removeProperty('--col');
     const nm = !v && G.notes ? G.notes[i] : 0;
     c.classList.toggle('noted', !!nm);
@@ -651,6 +657,7 @@ function showHelp() {
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button><h3>How to play</h3>
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
     <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint (it explains why), N for notes, Esc to let go of a color.</p>
+    <p>🔦 <b>Spotlight:</b> pick a color (or tap a colored tile) and every tile of that color gets a ring, while empty tiles it can't go in fade out. The bright empty tiles are the only places it can still go.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
