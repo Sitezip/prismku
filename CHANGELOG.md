@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-11 — "Rainbow Lines"
+- 🌈 Finish a row, column or box with every color exactly once and that line now shimmers, starting at the tile you just placed and rippling outward, with a short rising chime (more notes when one move completes two or three lines at once). It checks only the no-repeat rule, never the hidden answer, so it gives nothing away. Reduced-motion players get a steady white outline instead of the ripple.
+- How to play guide and in-game help describe rainbow lines.
+- No new player tickets today, and no open GitHub issues; all earlier tickets are closed.
+
 ## 2026-11-10 — "Spotlight"
 - 🔦 Color spotlight. Pick a color in the palette, or tap a tile that already has one, and every tile of that color gets a ring while the empty tiles it can't go in (because their row, column or box already has it) fade out. The empty tiles that stay bright, tinted in that color, are the only places it can still go. A lone bright tile in a line is a sure move. It turns off when you let go of the color or solve the board.
 - How to play guide and in-game help explain the spotlight.

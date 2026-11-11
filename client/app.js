@@ -5,6 +5,7 @@ import { fillNotes } from './notes.js';
 import { nextStep, explain } from './logic.js';
 import { paceState, beatBy } from './pace.js';
 import { spotlight, focusColor } from './spotlight.js';
+import { completedUnits, sweepOrder } from './sweep.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -66,6 +67,7 @@ const sfx = {
   erase: () => tone(300, 0.08, 'sine', 0.08),
   clash: () => { tone(160, 0.18, 'sawtooth', 0.06); tone(150, 0.2, 'sawtooth', 0.05, 0.05); },
   hint: () => { tone(880, 0.1); tone(1320, 0.15, 'sine', 0.1, 0.08); },
+  line: (n) => [1, 3, 5, 6].slice(0, Math.min(4, 1 + n)).forEach((k, j) => tone(SCALE[k], 0.18, 'sine', 0.07, 0.05 + j * 0.06)),
   win: () => [0, 2, 4, 5, 7, 9].forEach((k, i) => tone(SCALE[k + 1] || 1760, 0.25, 'triangle', 0.12, i * 0.09)),
 };
 
@@ -227,7 +229,7 @@ function render(full) {
   const cells = board.querySelectorAll('.cell');
   cells.forEach((c, i) => {
     const v = G.grid[i], given = !!G.puzzle[i];
-    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '') + (spot.same.has(i) ? ' same' : '') + (spot.blocked.has(i) ? ' blocked' : '') + (spot.open.has(i) ? ' open' : '');
+    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '') + (spot.same.has(i) ? ' same' : '') + (spot.blocked.has(i) ? ' blocked' : '') + (spot.open.has(i) ? ' open' : '') + (c.classList.contains('sweep') ? ' sweep' : '');
     if (v) c.style.setProperty('--col', `var(--c${v})`); else c.style.removeProperty('--col');
     const nm = !v && G.notes ? G.notes[i] : 0;
     c.classList.toggle('noted', !!nm);
@@ -302,6 +304,20 @@ function place(i, v) {
   const cell = $(`#board .cell[data-i="${i}"]`); cell?.classList.add('pop');
   persist();
   if (isSolved(G.grid, G.puzzle, G.mode)) win();
+  else if (v) lineSweep(i);
+}
+
+// Rainbow Lines: a row, column or box you just completed (every color once) shimmers from the placed tile outward.
+function lineSweep(i) {
+  const done = completedUnits(G.grid, G.mode, i);
+  if (!done.length) return;
+  sfx.line(done.length);
+  for (const u of done) for (const [c, k] of sweepOrder(u, i)) {
+    const el = $(`#board .cell[data-i="${c}"]`); if (!el) continue;
+    el.classList.remove('sweep'); void el.offsetWidth;
+    el.style.setProperty('--k', k); el.classList.add('sweep');
+    setTimeout(() => el.classList.remove('sweep'), 900 + k * 60);
+  }
 }
 
 function undo() {
@@ -658,6 +674,7 @@ function showHelp() {
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
     <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint (it explains why), N for notes, Esc to let go of a color.</p>
     <p>🔦 <b>Spotlight:</b> pick a color (or tap a colored tile) and every tile of that color gets a ring, while empty tiles it can't go in fade out. The bright empty tiles are the only places it can still go.</p>
+    <p>🌈 <b>Rainbow lines:</b> finish a row, column or box with every color once and it shimmers with a little chime. It only checks the rules, not the answer.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
