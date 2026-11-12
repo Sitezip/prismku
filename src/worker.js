@@ -1,6 +1,7 @@
 // Prismku (Rainbow Sudoku) — Cloudflare Worker: JSON API on D1 + static SPA assets.
 import { MODES, generate, isSolved, stringToGrid, gridToString, dailySeed, computeScore } from '../client/puzzle.js';
 import { checkClock, minSolveMs } from './clock.js';
+import { qdStart, qdReveal, qdFinish, qdLeaderboard } from './quickdraw.js';
 import { FIX_FROM, isValidEmail, planFixUpdate, renderFixEmail } from './feedback-mail.js';
 
 const LAUNCH_DAY = '2026-10-31';
@@ -410,6 +411,14 @@ async function api(request, env, url) {
   if (path === '/api/play/start' && m === 'POST') return playStamp(env, request, 'start');
   if (path === '/api/play/finish' && m === 'POST') return playStamp(env, request, 'finish');
   if (path === '/api/feedback' && m === 'POST') return submitFeedback(env, request);
+  if (path.startsWith('/api/qd/') && m === 'POST') {
+    if (!await rateLimit(env, request, 'qd', 90)) return err('slow down', 429);
+    const b = await readJson(request), h = { json, err, validId, auth };
+    if (path === '/api/qd/start') return qdStart(env, b, h);
+    if (path === '/api/qd/reveal') return qdReveal(env, b, h);
+    if (path === '/api/qd/finish') return qdFinish(env, b, h);
+  }
+  if (path === '/api/qd/leaderboard' && m === 'GET') return qdLeaderboard(env, url, { json, validId });
   const adminTicket = /^\/api\/admin\/feedback\/(\d+)$/.exec(path);
   if (adminTicket && m === 'POST') return adminFeedback(env, request, Number(adminTicket[1]));
   if (path === '/api/leaderboard' && m === 'GET') return leaderboard(env, url);
@@ -441,5 +450,6 @@ export default {
     for (const mode of Object.keys(MODES)) { await ensureDaily(env, utcDay(), mode); await ensureDaily(env, tomorrow, mode); }
     await env.DB.prepare('DELETE FROM rate_limits WHERE window < ?').bind(Math.floor(Date.now() / 60000) - 10).run();
     await env.DB.prepare('DELETE FROM plays WHERE started_at < ?').bind(Date.now() - 30 * 86400000).run();
+    await env.DB.prepare("DELETE FROM quickdraw_rounds WHERE status <> 'done' AND created_at < ?").bind(Date.now() - 86400000).run();
   },
 };

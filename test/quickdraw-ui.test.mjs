@@ -1,0 +1,30 @@
+import puppeteer from 'puppeteer-core';
+import assert from 'node:assert/strict';
+const BASE = process.env.BASE || 'http://127.0.0.1:8787';
+const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const p = await b.newPage(); await p.setViewport({ width: 360, height: 740, isMobile: true, hasTouch: true });
+const errs = []; p.on('pageerror', e => errs.push(e.message));
+await p.goto(BASE + '/', { waitUntil: 'networkidle0' });
+assert.ok(await p.$('a.qd-promo[href="./quick-draw/"]'), 'home links Quick Draw');
+await p.goto(BASE + '/quick-draw/', { waitUntil: 'networkidle0' });
+// False start
+await p.click('#go'); await new Promise(r => setTimeout(r, 300));
+await p.click('#qpal [data-c="1"]');
+assert.equal(await p.$eval('#msg', e => e.textContent), 'False start!');
+// Real round: wait until live, then tap the missing color.
+await p.click('#go');
+await p.waitForFunction(() => window.__qd.S.phase === 'live', { timeout: 8000 });
+await new Promise(r => setTimeout(r, 250));
+const ans = await p.evaluate(() => [1, 2, 3, 4].find(c => !window.__qd.S.board.includes(c)));
+await p.click(`#qpal [data-c="${ans}"]`);
+const t = await p.$eval('#qtime', e => e.textContent);
+assert.match(t, /^\d+\.\d{3} s$/, t);
+await new Promise(r => setTimeout(r, 800));
+const note = await p.$eval('#qnote', e => e.textContent);
+assert.ok(note.includes('personal best'), note);
+assert.ok(!(await p.$eval('#share', e => e.hidden)));
+assert.ok((await p.$eval('#pb', e => e.textContent)).endsWith(' s'));
+await p.screenshot({ path: '/tmp/qd.png' });
+assert.deepEqual(errs, []);
+console.log('quickdraw ui ok', t, note);
+await b.close();

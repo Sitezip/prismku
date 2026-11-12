@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs && wrangler dev",
-    "test": "node test/puzzle.test.mjs && node test/clock.test.mjs && node test/gesture.test.mjs && node test/feedback-mail.test.mjs && node test/rainbow.test.mjs && node test/notes.test.mjs && node test/logic.test.mjs && node test/pace.test.mjs && node test/spotlight.test.mjs && node test/sweep.test.mjs",
+    "test": "node test/puzzle.test.mjs && node test/clock.test.mjs && node test/gesture.test.mjs && node test/feedback-mail.test.mjs && node test/rainbow.test.mjs && node test/notes.test.mjs && node test/logic.test.mjs && node test/pace.test.mjs && node test/spotlight.test.mjs && node test/sweep.test.mjs && node test/quickdraw.test.mjs",
     "deploy": "wrangler deploy",
     "release": "node scripts/release.mjs"
   },

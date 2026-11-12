@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-12",
+  "title": "Quick Draw",
+  "notes": [
+    "⚡ New Quick Draw reaction mode: spot the one missing color in a 2×2 box after a random wait, timed to the millisecond",
+    "False starts don't count; a wrong color costs 1.000 s, a second ends the round",
+    "Personal best, share line, and server-checked Today and All-time leaderboards"
+  ],
+  "frozenAt": "2026-11-12T18:57:57.615Z"
+}

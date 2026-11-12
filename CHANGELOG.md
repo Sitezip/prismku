@@ -2,6 +2,13 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-12 — "Quick Draw"
+- ⚡ New Quick Draw reaction mode at /quick-draw/, linked from the home page. After a random 1.5 to 4.5 second wait, a 2×2 rainbow box appears with one tile empty; tap the one missing color. Time is shown to the millisecond (0.001 s). Tapping before the box shows is a false start, the first wrong color adds 1.000 s, and a second one ends the round.
+- Personal best, last-5 average and a share line with the box as emoji. Set a nickname to join the Today and All-time leaderboards.
+- The server deals every round, picks the wait, refuses an early reveal, stamps when it sent the board and when the answer came back, and rejects wrong colors, times under 0.100 s, and claims its own clock can't back up (shaved times are corrected to the server span minus network slack).
+- How to play guide and in-game help describe Quick Draw.
+- No new player tickets today, and no open GitHub issues; all earlier tickets are closed.
+
 ## 2026-11-11 — "Rainbow Lines"
 - 🌈 Finish a row, column or box with every color exactly once and that line now shimmers, starting at the tile you just placed and rippling outward, with a short rising chime (more notes when one move completes two or three lines at once). It checks only the no-repeat rule, never the hidden answer, so it gives nothing away. Reduced-motion players get a steady white outline instead of the ripple.
 - How to play guide and in-game help describe rainbow lines.

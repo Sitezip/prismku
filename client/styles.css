@@ -197,3 +197,5 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 .board.spot .cell.blocked{opacity:.38}
 .board.spot .cell.open{background:color-mix(in srgb, var(--spot) 16%, rgba(255,255,255,.06))}
 .board.spot .cell.open.sel{background:color-mix(in srgb, var(--spot) 26%, rgba(255,255,255,.08))}
+.qd-promo{display:block;max-width:520px;margin:14px auto 4px;padding:10px 14px;border-radius:14px;text-align:center;text-decoration:none;color:var(--text);background:linear-gradient(135deg,color-mix(in srgb,var(--c1) 30%,transparent),color-mix(in srgb,var(--c3) 25%,transparent),color-mix(in srgb,var(--c4) 25%,transparent),color-mix(in srgb,var(--c2) 30%,transparent));border:1px solid var(--line)}
+.qd-promo:hover{border-color:var(--accent)}
