@@ -1,6 +1,6 @@
 // Tickets #6 and #7: paint mode must let go, and a solved board must not restart.
 import assert from 'node:assert/strict';
-import { paletteTap, canRestart, clearedWhileSolved } from '../client/gesture.js';
+import { paletteTap, canRestart, clearedWhileSolved, restartResetsClock } from '../client/gesture.js';
 
 const tap = (over) => paletteTap({ done: false, brush: 0, sel: -1, v: 1, given: false, notesOn: false, cellValue: 0, ...over });
 
@@ -28,5 +28,9 @@ assert.equal(canRestart(true), false);
 assert.equal(clearedWhileSolved(true, false), true);
 assert.equal(clearedWhileSolved(true, true), false);
 assert.equal(clearedWhileSolved(false, false), false);
+
+// Ticket #10: Free play restart starts the clock over; the daily keeps one clock.
+assert.equal(restartResetsClock('free'), true);
+assert.equal(restartResetsClock('daily'), false);
 
 console.log('gesture tests passed');

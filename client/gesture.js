@@ -32,3 +32,13 @@ export function canRestart(done) {
 export function clearedWhileSolved(done, gridSolved) {
   return !!done && !gridSolved;
 }
+
+/**
+ * Ticket #10: in Free play, Restart starts the clock over. A restarted board has
+ * already been seen, so that run is practice: it never goes to the leaderboard
+ * or local bests (otherwise you could study the board, restart and race it).
+ * Today's daily keeps one continuous clock.
+ */
+export function restartResetsClock(play) {
+  return play !== 'daily';
+}

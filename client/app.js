@@ -1,5 +1,5 @@
 import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, gridToString } from './puzzle.js';
-import { paletteTap, canRestart, clearedWhileSolved } from './gesture.js';
+import { paletteTap, canRestart, clearedWhileSolved, restartResetsClock } from './gesture.js';
 import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
 import { nextStep, explain } from './logic.js';
@@ -257,7 +257,7 @@ function render(full) {
   $('#btn-undo').disabled = !G.hist.length || G.done;
   $('#btn-hint').disabled = $('#btn-erase').disabled = $('#btn-notes').disabled = !canRestart(G.done);
   $('#btn-restart').disabled = !canRestart(G.done);
-  $('#btn-restart').title = G.done ? 'Solved — restart is off' : 'Restart this puzzle';
+  $('#btn-restart').title = G.done ? 'Solved — restart is off' : restartResetsClock(G.play) ? 'Restart with a fresh timer (practice run)' : 'Restart this puzzle (timer keeps running)';
   $('#btn-notes').setAttribute('aria-pressed', notesOn); $('#btn-notes').classList.toggle('on', notesOn);
   document.body.classList.toggle('notes-on', notesOn);
   $('#btn-autonotes').hidden = !notesOn || !canRestart(G.done);
@@ -357,9 +357,13 @@ function hint() {
 function restart() {
   // Solved boards stay filled. Clearing one without clearing `done` left a board that refused moves (ticket #6).
   if (!canRestart(G.done)) return toast(G.play === 'daily' ? 'Today’s daily is solved — try Free play!' : 'This board is solved — tap ✨ New for another.');
-  if (!confirm('Restart this puzzle? Your timer keeps running.')) return;
+  const fresh = restartResetsClock(G.play);
+  if (!confirm(fresh ? 'Restart this puzzle with a fresh timer? Restarted runs are practice and stay off the leaderboard.' : 'Restart this puzzle? Your timer keeps running.')) return;
   G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; sel = -1; brush = 0;
+  // Ticket #10: Free play restarts the clock and counters; the run becomes practice (see gesture.js).
+  if (fresh) { G.elapsed = 0; G.startedAt = performance.now(); G.moves = G.hints = G.mistakes = 0; G.practice = true; }
   render(false); persist();
+  if (fresh) toast('⟲ Fresh timer — practice run (off the leaderboard). Tap ✨ New for a ranked board.', 3600);
 }
 
 function randomSeed() { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; }
@@ -375,7 +379,7 @@ function shareGrid() {
 }
 function shareText() {
   const m = MODES[G.mode], r = G.result || {};
-  const head = G.play === 'daily' ? `Prismku #${G.number} 🌈 ${m.label} ${m.size}×${m.size}` : G.replay ? `Prismku #${dayNumber(G.replay)} (replay) 🌈 ${m.label} ${m.size}×${m.size}` : `Prismku 🌈 ${m.label} ${m.size}×${m.size}`;
+  const head = G.play === 'daily' ? `Prismku #${G.number} 🌈 ${m.label} ${m.size}×${m.size}` : G.replay ? `Prismku #${dayNumber(G.replay)} (replay) 🌈 ${m.label} ${m.size}×${m.size}` : `Prismku 🌈 ${m.label} ${m.size}×${m.size}${G.practice ? ' (practice)' : ''}`;
   let out = `${head}\n⏱ ${fmt(G.elapsed)} · 💡${G.hints} · ⚡${G.mistakes}${r.score ? ` · ${r.score} pts` : ''}\n${shareGrid()}`;
   if (G.play === 'daily') {
     const line = rainbowShareLine(modesCleared(store.get('dailies', {}), G.day));
@@ -406,10 +410,13 @@ async function win() {
   // local bests
   const bests = store.get('bests', {});
   const b = bests[G.mode] || { score: 0, fastest: null, solved: 0 };
-  const pb = score > b.score;
-  G.result.beatBy = beatBy(G.elapsed, b.fastest);
-  bests[G.mode] = { score: Math.max(b.score, score), fastest: b.fastest ? Math.min(b.fastest, G.elapsed) : G.elapsed, solved: b.solved + 1 };
-  store.set('bests', bests);
+  const pb = !G.practice && score > b.score;
+  if (G.practice) G.result.practice = true;
+  else {
+    G.result.beatBy = beatBy(G.elapsed, b.fastest);
+    bests[G.mode] = { score: Math.max(b.score, score), fastest: b.fastest ? Math.min(b.fastest, G.elapsed) : G.elapsed, solved: b.solved + 1 };
+    store.set('bests', bests);
+  }
   if (G.play === 'daily') {
     const d = store.get('dailies', {}); d[`${G.day}:${G.mode}`] = { score, t: G.elapsed }; store.set('dailies', d);
     G.result.fullRainbow = isFullRainbow(d, G.day);
@@ -419,7 +426,7 @@ async function win() {
   G.result.personalBest = pb;
   persist();
   setTimeout(() => showWin(), 900);
-  if (!ARCHIVE && player.nick) submit();
+  if (!ARCHIVE && player.nick && !G.practice) submit();
 }
 
 async function ensureRegistered(nick) {
@@ -431,7 +438,7 @@ async function ensureRegistered(nick) {
 }
 
 async function submit() {
-  if (!G.done || G.result?.submitted || ARCHIVE) return;
+  if (!G.done || G.result?.submitted || G.practice || ARCHIVE) return;
   if (!await ensureRegistered(player.nick)) return;
   const body = { playerId: player.id, secret: player.secret, mode: G.mode, seed: G.seed, daily: G.play === 'daily', day: G.day,
     grid: gridToString(G.grid), timeMs: Math.round(G.elapsed), moves: G.moves, hints: G.hints, mistakes: G.mistakes, version: CONFIG.version };
@@ -451,6 +458,7 @@ async function submit() {
 function winExtra() {
   const r = G.result || {};
   if (ARCHIVE) return `<p class="tip">Archive version — scores aren’t submitted. <a href="/">Play the latest Prismku</a>.</p>`;
+  if (r.practice) return `<p class="tip">🔁 Practice run — you restarted this board, so the time stays off the leaderboard. Tap <b>Next puzzle</b> for a ranked one.</p>`;
   if (!player.nick) return `<p>Add your name to the leaderboard:</p><input type="text" id="nick" maxlength="16" placeholder="Nickname" autocomplete="nickname"><div class="row"><button class="btn primary" data-act="save-nick">Save & submit</button></div>`;
   if (!r.submitted) return `<p class="tip">Submitting score…</p>`;
   if (r.ranked === false) return `<p class="tip">⚠️ Unranked: the server couldn’t confirm when this board was first shown, so this time stays off the leaderboards.</p>`;

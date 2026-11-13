@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-13 — "Fresh Start"
+- ⟲ In Free play, Restart now starts the timer over, along with moves, hints and clashes (player idea, ticket #10). You've already seen that board, so a restarted run is marked practice: it shows your time and score but stays off the leaderboard and doesn't change your personal bests. Tap ✨ New for a ranked board. Today's daily keeps one clock, as before.
+- The Restart button's tooltip, the confirm prompt, the win screen and the share line ("(practice)") say which kind of run it is; the How to play guide explains it.
+- Ticket #10 (idea) shipped; no open GitHub issues.
+
 ## 2026-11-12 — "Quick Draw"
 - ⚡ New Quick Draw reaction mode at /quick-draw/, linked from the home page. After a random 1.5 to 4.5 second wait, a 2×2 rainbow box appears with one tile empty; tap the one missing color. Time is shown to the millisecond (0.001 s). Tapping before the box shows is a false start, the first wrong color adds 1.000 s, and a second one ends the round.
 - Personal best, last-5 average and a share line with the box as emoji. Set a nickname to join the Today and All-time leaderboards.
