@@ -16,6 +16,8 @@ spoiler-free share grids.
 - Server-verified scores in Cloudflare D1: the Worker regenerates the puzzle from its seed and checks the submitted grid
 - Global daily / weekly / all-time leaderboards, achievements, community highlights feed
 - Wordle-style share text: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint
+- **Dare a friend:** every Free play board has a challenge link (`prismku.com/c/<code>`) that loads the exact puzzle with your time to beat; the Worker gives it its own link preview (“Can you beat 1:23 on this Prismku Hard 6×6?”)
+- ⚡ Quick Draw reaction mode at `/quick-draw/`
 - PWA (installable, offline), OG/Twitter cards, JSON-LD, sitemap
 - **Version archive:** every release is frozen under `/v/<YYYY-MM-DD>/` and listed on `/versions/`
 
@@ -43,6 +45,7 @@ Browser SPA (vanilla ES modules, no framework)      Cloudflare Worker (src/worke
 | GET | `/api/leaderboard?mode=&scope=daily\|week\|all` | top 25 |
 | GET | `/api/me?id=` | personal bests + achievements |
 | GET | `/api/stats` | community stats + highlights |
+| GET | `/c/<code>` | challenge link: the game page with a board-specific link preview (`<base href="/">`, noindex) |
 
 Anti-abuse: per-IP-hash (salted, rotated daily) rate limits in D1, sane time/move bounds per difficulty,
 one daily submission per player, nickname filter.

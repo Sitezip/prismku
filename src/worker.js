@@ -3,6 +3,7 @@ import { MODES, generate, isSolved, stringToGrid, gridToString, dailySeed, compu
 import { checkClock, minSolveMs } from './clock.js';
 import { qdStart, qdReveal, qdFinish, qdLeaderboard } from './quickdraw.js';
 import { FIX_FROM, isValidEmail, planFixUpdate, renderFixEmail } from './feedback-mail.js';
+import { challengeFromLocation, challengeTitle } from '../client/challenge.js';
 
 const LAUNCH_DAY = '2026-10-31';
 const NICK_RE = /^[A-Za-z0-9 _.\-]{2,16}$/;
@@ -427,6 +428,27 @@ async function api(request, env, url) {
   return err('not found', 404);
 }
 
+// GET /c/<code> — a Free play challenge link (2026-11-16 "Dare"). Serves the game page with a link preview that
+// names the board and time to beat; the client reads the code from the path and loads that exact puzzle.
+async function challengePage(request, env, url) {
+  const c = challengeFromLocation(url.pathname, '');
+  if (!c) return Response.redirect(new URL('/', url).toString(), 302);
+  const home = await env.ASSETS.fetch(new Request(new URL('/', url).toString(), { headers: request.headers }));
+  if (!home.ok || !(home.headers.get('content-type') || '').includes('text/html')) return home;
+  const title = challengeTitle(c), desc = 'Prismku is Rainbow Sudoku: fill the grid with colors so none repeats in a row, column or box. Same board, same rules. Race the clock.';
+  const page = `https://${url.host}${url.pathname}`;
+  const set = (v) => ({ element(e) { e.setAttribute('content', v); } });
+  const res = new HTMLRewriter()
+    .on('head', { element(e) { e.prepend('<base href="/">', { html: true }); } })
+    .on('title', { element(e) { e.setInnerContent(`${title} · Prismku`); } })
+    .on('meta[property="og:title"]', set(title)).on('meta[name="twitter:title"]', set(title))
+    .on('meta[property="og:description"]', set(desc)).on('meta[name="twitter:description"]', set(desc))
+    .on('meta[name="description"]', set(desc)).on('meta[property="og:url"]', set(page))
+    .transform(home);
+  const h = new Headers(res.headers); h.set('cache-control', 'public, max-age=300'); h.delete('etag'); h.set('x-robots-tag', 'noindex');
+  return new Response(res.body, { status: 200, headers: h });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -442,6 +464,7 @@ export default {
         return err('server error', 500);
       }
     }
+    if (url.pathname.startsWith('/c/')) return challengePage(request, env, url);
     return env.ASSETS.fetch(request);
   },
   async scheduled(event, env, ctx) {

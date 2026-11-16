@@ -6,6 +6,7 @@ import { nextStep, explain } from './logic.js';
 import { paceState, beatBy } from './pace.js';
 import { spotlight, focusColor } from './spotlight.js';
 import { completedUnits, sweepOrder } from './sweep.js';
+import { challengeFromLocation, challengeUrl, challengeVerdict, challengeTitle, marginText, rememberSeed, seenSeed } from './challenge.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -146,7 +147,9 @@ function checkSeen() {
 function markSeen(g) {
   if (g.seen) return;
   if (G === g) { g.elapsed = elapsed(); g.startedAt = performance.now(); }
-  g.seen = true; if (G === g) { persist(); sendStart(); }
+  g.seen = true;
+  if (g.play === 'free') store.set('freeSeeds', rememberSeed(store.get('freeSeeds', []), g.mode, g.seed));
+  if (G === g) { persist(); sendStart(); }
 }
 function sendStart() {
   if (ARCHIVE || !G || G.done) return;
@@ -385,7 +388,35 @@ function shareText() {
     const line = rainbowShareLine(modesCleared(store.get('dailies', {}), G.day));
     if (line) out += line + '\n';
   }
-  return out + CONFIG.siteUrl.replace('https://', '');
+  if (G.challenge) { const v = G.done && challengeVerdict(G.elapsed, G.challenge.ms); if (G.challenge.ms) out += `⚔️ Challenge: beat ${fmt(G.challenge.ms)}${v ? (v.won ? ' ✅' : v.tie ? ' 🤝' : ' ❌') : ''}\n`; }
+  // Free play shares a link to this exact board so friends can race it (2026-11-16 "Dare"). Dailies need no link.
+  const link = G.play === 'free' && challengeUrl(CONFIG.siteUrl, { mode: G.mode, seed: G.seed, ms: G.done ? G.elapsed : null });
+  return out + (link || CONFIG.siteUrl).replace('https://', '');
+}
+function dareText() {
+  const url = challengeUrl(CONFIG.siteUrl, { mode: G.mode, seed: G.seed, ms: G.done ? G.elapsed : null });
+  return `⚔️ ${challengeTitle({ mode: G.mode, ms: G.done ? G.elapsed : null })} Same board, same rules: ${url}`;
+}
+async function dare() {
+  const text = dareText();
+  if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+    try { await navigator.share({ text }); return; } catch (e) { if (e?.name === 'AbortError') return; }
+  }
+  if (await copyText(text)) { flashBtn('dare', '✓ Link copied!'); toast('Challenge link copied — send it to a friend!'); }
+  else { prompt('Copy this challenge link:', text); }
+}
+function challengeTip() {
+  const c = G.challenge; if (!c) return '';
+  return `⚔️ Challenge board · ${esc(MODES[G.mode].label)}${c.ms ? ` — beat <b>${fmt(c.ms)}</b>` : ''}${G.practice ? ' · you’ve played this board, so it’s practice' : ''}. Same puzzle your friend solved.`;
+}
+function startChallenge(c) {
+  persist();
+  const saved = store.get(progressKey('free', c.mode));
+  const resume = saved && saved.seed === c.seed && saved.mode === c.mode;
+  const seen = !resume && seenSeed(store.get('freeSeeds', []), c.mode, c.seed);
+  newGame('free', c.mode, c.seed);
+  if (!resume) { G.challenge = { ms: c.ms }; if (seen) G.practice = true; persist(); }
+  if (G.done) showDoneState(); else $('#tip').innerHTML = challengeTip();
 }
 
 function confetti() {
@@ -466,6 +497,10 @@ function winExtra() {
     ${(r.achievements || []).map(a => `<div class="ach">🏅 ${esc(a.title)}</div>`).join('')}`;
 }
 
+function challengeNote() {
+  const v = G.challenge && challengeVerdict(G.elapsed, G.challenge.ms); if (!v) return '';
+  return `<p class="dare-verdict ${v.won ? 'won' : ''}">⚔️ ${v.won ? `You beat their ${fmt(G.challenge.ms)} by ${marginText(v.diff)}!` : v.tie ? `Dead heat with their ${fmt(G.challenge.ms)}!` : `Their ${fmt(G.challenge.ms)} holds, by ${marginText(v.diff)}. Rematch?`}</p>`;
+}
 function showWin() {
   const m = MODES[G.mode], r = G.result || {};
   const full = !!r.fullRainbow;
@@ -485,10 +520,11 @@ function showWin() {
     ${r.personalBest ? `<p style="text-align:center">⭐ Personal best for ${m.label}!</p>` : ''}
     ${r.beatBy ? `<p class="pb-beat">⏱️ Fastest ${m.label} yet, ${fmt(r.beatBy)} quicker than your old best.</p>` : ''}
     ${rainbowNote}
+    ${challengeNote()}
     <div id="win-extra">${winExtra()}</div>
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
-    <button class="btn" data-act="share-img">🖼️ Image</button>
+    <button class="btn" data-act="share-img">🖼️ Image</button>${G.play === 'free' ? '<button class="btn" data-act="dare">⚔️ Dare a friend</button>' : ''}
     <button class="btn" data-act="calendar">📅 Calendar</button><button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
     <button class="btn" data-act="lb">Leaderboard</button>
     <button class="btn" data-act="feedback">💬 Feedback</button></div>`);
@@ -504,7 +540,7 @@ function showDoneState() {
   } else if (G.replay) {
     $('#tip').innerHTML = 'Replay solved! <a href="#" data-act="calendar">📅 Pick another day</a> or tap ✨ New.';
   } else {
-    $('#tip').innerHTML = 'Solved! Tap ✨ New for another.';
+    $('#tip').innerHTML = G.challenge ? `${challengeNote().replace(/<\/?p[^>]*>/g, '') || 'Challenge solved!'} <a href="#" data-act="showwin">See result</a> · tap ✨ New for another.` : 'Solved! Tap ✨ New for another. <a href="#" data-act="dare">⚔️ Dare a friend</a>';
   }
   updateCountdown();
 }
@@ -682,6 +718,7 @@ function showHelp() {
     <p>Fill every empty tile with a color so <b>no color repeats in any row or column</b> (and not inside a bold box when the board has them).</p>
     <p>👉 Tap a tile, then tap a color. Or tap a color first to paint several tiles — its border glows, and a “tap to stop” bar appears. Tap that same color again (or the bar) to let go.<br>⌨️ Keyboard: arrows to move, 1–9 for colors, Backspace to erase, Z to undo, H for a hint (it explains why), N for notes, Esc to let go of a color.</p>
     <p>🔦 <b>Spotlight:</b> pick a color (or tap a colored tile) and every tile of that color gets a ring, while empty tiles it can't go in fade out. The bright empty tiles are the only places it can still go.</p>
+    <p>⚔️ <b>Dare a friend:</b> after a Free play solve, tap ⚔️ Dare a friend (or Share) for a link to that exact board with your time to beat.</p>
     <p>🌈 <b>Rainbow lines:</b> finish a row, column or box with every color once and it shimmers with a little chime. It only checks the rules, not the answer.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
@@ -783,7 +820,7 @@ function startMode(play, mode) {
   persist();
   if (play === 'free') { const s = store.get(progressKey('free', mode)); newGame('free', mode, s ? s.seed : randomSeed()); }
   else newGame('daily', mode);
-  if (!G.done) $('#tip').textContent = 'Tap a tile, then a color. No color may repeat in a row, column or bold box.';
+  if (!G.done) { if (G.challenge) $('#tip').innerHTML = challengeTip(); else $('#tip').textContent = 'Tap a tile, then a color. No color may repeat in a row, column or bold box.'; }
 }
 
 $('#dlg').addEventListener('click', async e => {
@@ -801,6 +838,7 @@ $('#dlg').addEventListener('click', async e => {
   if (a === 'share') share();
   if (a === 'share-streak') shareStreak();
   if (a === 'share-img') shareImage();
+  if (a === 'dare') dare();
   if (a === 'feedback') showFeedback();
   if (a === 'fb-send') sendFeedback();
   if (a === 'lb') showLeaderboard(G.mode, G.play === 'daily' ? 'daily' : 'all', G.play === 'daily' ? G.day : serverDay);
@@ -814,6 +852,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('[data-act="showwin"]')) { e.preventDefault(); showWin(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="calendar"]')) { e.preventDefault(); showCalendar(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="feedback"]')) { e.preventDefault(); showFeedback(); }
+  if (!e.target.closest('#dlg') && e.target.closest('[data-act="dare"]')) { e.preventDefault(); dare(); }
 });
 
 document.addEventListener('keydown', e => {
@@ -865,10 +904,12 @@ function monetization() {
   applySettings(); monetization();
   try { const h = await api('health'); if (h.ok && h.day) serverDay = h.day; } catch {}
   const mode = MODES[settings.mode] ? settings.mode : 'easy';
-  startMode(settings.play === 'free' ? 'free' : 'daily', mode);
+  const dareIn = ARCHIVE ? null : challengeFromLocation(location.pathname, location.search);
+  if (dareIn) { startChallenge(dareIn); try { history.replaceState(null, '', '/'); } catch {} }
+  else startMode(settings.play === 'free' ? 'free' : 'daily', mode);
   loadCommunity();
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, startChallenge, shareText, dareText, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
 })();

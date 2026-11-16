@@ -2,6 +2,13 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-16 — "Dare"
+- ⚔️ Challenge a friend to your exact board. After a Free play solve, tap **⚔️ Dare a friend** (or Share result) for a link like `prismku.com/c/h1m0yjhs-162`. Whoever opens it gets the same puzzle, with your time to beat shown above the board, and their win screen says who was faster ("You beat their 1:23 by 2.4s!"). Their share line adds "⚔️ Challenge: beat 1:23 ✅".
+- Challenge links get their own link preview in chats and social posts ("Can you beat 1:23 on this Prismku Hard 6×6?").
+- Fair play: a challenge run is a normal ranked Free play run for someone seeing the board for the first time. If this device has already played that board, the run is practice (same rule as Fresh Start). Opening your own link just shows your solved board.
+- How to play guide, in-game help and README describe challenge links.
+- No new player tickets today; the one open GitHub issue is a third-party directory listing notice, not a game report.
+
 ## 2026-11-13 — "Fresh Start"
 - ⟲ In Free play, Restart now starts the timer over, along with moves, hints and clashes (player idea, ticket #10). You've already seen that board, so a restarted run is marked practice: it shows your time and score but stays off the leaderboard and doesn't change your personal bests. Tap ✨ New for a ranked board. Today's daily keeps one clock, as before.
 - The Restart button's tooltip, the confirm prompt, the win screen and the share line ("(practice)") say which kind of run it is; the How to play guide explains it.
