@@ -2,6 +2,13 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-18 — "Print & Play"
+- 🖨️ New free printable worksheets at /printable/ (footer link, How to play guide). Pick Easy 4×4, Medium 5×5, Hard 6×6 or Expert 9×9, and 1, 2, 4 or 6 boards per sheet. Every board has one solution, and every tile carries a symbol so it reads in black and white and for colorblind players.
+- Two styles: Full color, or Crayon (low ink), which prints the starting tiles as colored outlines with a color key so kids color in every tile. An answer key prints on its own page, and you can turn it off.
+- Each printed puzzle has a short prismku.com/c/… link that opens that exact board in the game, and the sheet's address reproduces the same puzzles, so a teacher can share one sheet with a whole class.
+- The page has search-friendly titles and FAQ markup and is in the sitemap.
+- No new player tickets today; the one open GitHub issue is a third-party directory listing notice, not a game report.
+
 ## 2026-11-16 — "Dare"
 - ⚔️ Challenge a friend to your exact board. After a Free play solve, tap **⚔️ Dare a friend** (or Share result) for a link like `prismku.com/c/h1m0yjhs-162`. Whoever opens it gets the same puzzle, with your time to beat shown above the board, and their win screen says who was faster ("You beat their 1:23 by 2.4s!"). Their share line adds "⚔️ Challenge: beat 1:23 ✅".
 - Challenge links get their own link preview in chats and social posts ("Can you beat 1:23 on this Prismku Hard 6×6?").

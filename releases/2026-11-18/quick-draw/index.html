@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quick Draw — a color reaction test · Prismku</title>
+<meta name="description" content="Prismku Quick Draw: wait for the 2×2 rainbow box to appear, then tap the one missing color as fast as you can. Timed to the millisecond, with a daily leaderboard.">
+<meta name="theme-color" content="#120b2e">
+<link rel="canonical" href="https://prismku.com/quick-draw/">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Prismku">
+<meta property="og:title" content="Prismku Quick Draw — how fast can you spot the missing color?">
+<meta property="og:description" content="A 2×2 rainbow box, one empty tile, one right color. Reaction timed to the millisecond.">
+<meta property="og:url" content="https://prismku.com/quick-draw/">
+<meta property="og:image" content="https://prismku.com/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="../styles.css">
+<style>
+main.qd{max-width:520px;margin:0 auto;padding:4px 16px 20px;text-align:center}
+.qd h1{margin:6px 0 2px;font-size:28px;background:linear-gradient(90deg,var(--c1),var(--c3),var(--c4),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.qd .sub{color:var(--muted);margin:0 0 12px}
+.arena{position:relative;margin:0 auto;width:min(80vw,300px);aspect-ratio:1;border-radius:22px;padding:10px;background:var(--panel);border:2px solid var(--line);touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer}
+.arena.wait{border-color:var(--bad);animation:qdwait 1.2s ease-in-out infinite}
+.arena.live{border-color:var(--c4)}
+@keyframes qdwait{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--bad) 25%,transparent)}}
+.qboard{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;height:100%}
+.qcell{border-radius:14px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center}
+.qcell svg{width:42%;height:42%;fill:rgba(0,0,0,.35)}
+.qcell.c1{background:var(--c1)}.qcell.c2{background:var(--c2)}.qcell.c3{background:var(--c3)}.qcell.c4{background:var(--c4)}
+.qcell.empty{background:transparent;border:3px dashed var(--text)}
+.qcell.got{animation:qdpop .35s ease-out}
+@keyframes qdpop{from{transform:scale(.6)}}
+.arena .msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;font-weight:700;pointer-events:none;text-shadow:0 2px 8px #000}
+.qpal{display:flex;gap:12px;justify-content:center;margin:16px 0 8px}
+.qpal button{width:64px;height:64px;border-radius:50%;border:3px solid rgba(255,255,255,.5);touch-action:manipulation;display:flex;align-items:center;justify-content:center}
+.qpal button svg{width:45%;height:45%;fill:rgba(0,0,0,.4)}
+.qpal button.shake{animation:qdshake .3s}
+@keyframes qdshake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.qtime{font:700 44px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;margin:8px 0 2px;min-height:50px}
+.qnote{color:var(--muted);min-height:22px;margin:0 0 10px}
+.qrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0}
+.qstats{display:flex;justify-content:center;gap:18px;color:var(--muted);font-size:14px}
+.qstats b{color:var(--text);font-family:ui-monospace,Menlo,monospace}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:16px 0;text-align:left}
+.card h2{font-size:18px;margin:0 0 6px}
+.tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button{padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:transparent}.tabs button.on{background:var(--c2);border-color:var(--c2)}
+table.lb{width:100%;border-collapse:collapse}table.lb td{padding:4px 2px;border-bottom:1px solid var(--line)}table.lb td.s{text-align:right;font-family:ui-monospace,Menlo,monospace}table.lb tr.me{color:var(--accent)}
+.nick input{padding:8px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--text);width:160px}
+@media (prefers-reduced-motion:reduce){.arena.wait,.qcell.got,.qpal button.shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="bg-pattern" aria-hidden="true"></div>
+<header class="top">
+  <a class="brand" href="../" aria-label="Prismku home">
+    <img src="../img/logo.svg" alt="" width="40" height="40">
+    <span class="brand-text"><b>Prismku</b><small>Rainbow Sudoku</small></span>
+  </a>
+  <a class="btn" style="text-decoration:none" href="../">← Puzzles</a>
+</header>
+<main class="qd">
+  <h1>⚡ Quick Draw</h1>
+  <p class="sub">Wait for the box. Tap the missing color. Fastest fingers win.</p>
+  <div class="arena" id="arena" role="button" tabindex="0" aria-label="Quick Draw board">
+    <div class="qboard" id="qboard"></div>
+    <div class="msg" id="msg">Tap to start</div>
+  </div>
+  <div class="qpal" id="qpal" aria-label="Colors"></div>
+  <div class="qtime" id="qtime" aria-live="polite"></div>
+  <p class="qnote" id="qnote"></p>
+  <div class="qrow">
+    <button class="btn primary" id="go">Start</button>
+    <button class="btn" id="share" hidden>Share</button>
+  </div>
+  <div class="qstats"><span>Best <b id="pb">–</b></span><span>Last 5 avg <b id="avg">–</b></span><span>Rounds <b id="n">0</b></span></div>
+
+  <section class="card" id="lb-card">
+    <h2>🏆 Fastest draws</h2>
+    <div class="tabs"><button data-scope="daily" class="on">Today</button><button data-scope="all">All time</button></div>
+    <div id="lb">Loading…</div>
+    <p class="nick" id="nick-row"></p>
+  </section>
+
+  <section class="card" id="help">
+    <h2>How Quick Draw works</h2>
+    <ul>
+      <li>Press <b>Start</b> (or Space). The board goes dark and the border pulses red. <b>Wait.</b></li>
+      <li>After a random wait of 1.5 to 4.5 seconds, a 2×2 rainbow box appears with one tile empty. Like a box in Easy Prismku, it holds red, blue, yellow and green once each, so the empty tile can only be the one color you don't see.</li>
+      <li>Tap that color in the palette below (or press 1 to 4). Your time runs from the moment the box appears to your tap and is shown to the millisecond (0.001 s). Browsers round their clocks on purpose, so finer digits wouldn't be real.</li>
+      <li><b>False start:</b> tap before the box appears and the round doesn't count.</li>
+      <li><b>Wrong color:</b> the first slip adds 1.000 s. A second one ends the round.</li>
+      <li>Your personal best is saved on this device. With a nickname, each finished round goes to the leaderboard. The server deals every round, sets the wait, notes when it showed you the board and when you answered, and turns away times under 0.100 s or ones its own clock can't back up.</li>
+    </ul>
+    <p><a href="../how-to-play/">How to play Prismku</a> · <a href="../">Play today's color puzzle</a></p>
+  </section>
+</main>
+<footer class="foot"><span>© 2026 Prismku · <a href="../versions/">Version history</a></span><span>Nicknames are public on leaderboards.</span></footer>
+<script type="module" src="./qd.js"></script>
+</body>
+</html>
