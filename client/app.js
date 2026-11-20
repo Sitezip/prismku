@@ -1,4 +1,4 @@
-import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, gridToString } from './puzzle.js';
+import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, dailySeed, computeScore, scoreBreakdown, gridToString } from './puzzle.js';
 import { paletteTap, canRestart, clearedWhileSolved, restartResetsClock } from './gesture.js';
 import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
@@ -480,6 +480,7 @@ async function submit() {
     Object.assign(G.result, { submitted: true, score: r.score, dailyRank: r.dailyRank, streak: r.streak, allTimeRecord: r.allTimeRecord, achievements: r.achievements, ranked: r.ranked !== false, clock: r.clock || null, serverMs: r.timeMs });
     persist();
     if ($('#dlg').open && $('#win-extra')) $('#win-extra').innerHTML = winExtra();
+    if ($('#dlg').open && $('#win-score')) $('#win-score').innerHTML = winScore();
     (r.achievements || []).forEach((a, k) => setTimeout(() => toast('🏅 ' + a.title), 1200 + k * 2800));
     loadCommunity();
   } else if (r.status === 409) { G.result.submitted = true; persist(); }
@@ -497,6 +498,13 @@ function winExtra() {
     ${(r.achievements || []).map(a => `<div class="ach">🏅 ${esc(a.title)}</div>`).join('')}`;
 }
 
+// ⚡ Overdrive (ticket #11): points earned past the old 2.5×-par ceiling. Uses the shown score (server-corrected after submit).
+function overdriveOf(mode, score) { const c = scoreBreakdown(mode, MODES[mode].par * 400).ceiling; return { ceiling: c, extra: Math.max(0, (score || 0) - c) }; }
+function winScore() {
+  const r = G.result || {}, full = !!r.fullRainbow, od = overdriveOf(G.mode, r.score);
+  return `<div class="big${full ? ' rainbow' : ''}${od.extra ? ' overdrive' : ''}">${r.score} pts</div>`
+    + (od.extra ? `<p class="od-note">⚡ <b>Overdrive +${od.extra.toLocaleString('en-US')}</b> past the ${od.ceiling.toLocaleString('en-US')} pace line. Every second faster still scores.</p>` : '');
+}
 function challengeNote() {
   const v = G.challenge && challengeVerdict(G.elapsed, G.challenge.ms); if (!v) return '';
   return `<p class="dare-verdict ${v.won ? 'won' : ''}">⚔️ ${v.won ? `You beat their ${fmt(G.challenge.ms)} by ${marginText(v.diff)}!` : v.tie ? `Dead heat with their ${fmt(G.challenge.ms)}!` : `Their ${fmt(G.challenge.ms)} holds, by ${marginText(v.diff)}. Rematch?`}</p>`;
@@ -515,7 +523,7 @@ function showWin() {
       : '');
   openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button>
     <h3 class="${full ? 'rainbow-title' : ''}">${title}</h3>
-    <div class="big${full ? ' rainbow' : ''}">${r.score} pts</div>
+    <div id="win-score">${winScore()}</div>
     <div class="kv"><div><b>${fmt(G.elapsed)}</b>time</div><div><b>${G.moves}</b>moves</div><div><b>${G.hints}</b>hints</div><div><b>${G.mistakes}</b>clashes</div></div>
     ${r.personalBest ? `<p style="text-align:center">⭐ Personal best for ${m.label}!</p>` : ''}
     ${r.beatBy ? `<p class="pb-beat">⏱️ Fastest ${m.label} yet, ${fmt(r.beatBy)} quicker than your old best.</p>` : ''}

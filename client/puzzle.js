@@ -138,12 +138,22 @@ export function isSolved(grid, puzzle, modeKey) {
   return conflicts(grid, modeKey).size === 0;
 }
 
-export function computeScore(modeKey, timeMs, hints, mistakes) {
+// Scoring: base × (par ÷ adjusted seconds). Up to 2.5× par this is linear (the old ceiling: Easy 1,250 · Medium 2,250 ·
+// Hard 3,750 · Expert 10,000). Past that, "Overdrive" keeps every faster second worth points on a gentle log curve,
+// so there is no flat cap (ticket #11). Server clock floors (src/clock.js) bound how high a ranked score can go.
+export const OVERDRIVE_AT = 2.5;
+// Times under the fastest believable solve (same floor as src/clock.js: 450 ms per empty tile) score as that floor.
+export const scoreFloorMs = (modeKey) => { const m = MODES[modeKey]; return Math.max(m.minMs, (m.size * m.size - m.clues) * 450); };
+export function scoreBreakdown(modeKey, timeMs, hints = 0, mistakes = 0) {
   const m = MODES[modeKey];
-  const adj = timeMs / 1000 + hints * 15 + mistakes * 3;
-  const ratio = Math.min(2.5, m.par / Math.max(1, adj));
-  return Math.max(10, Math.round(m.base * ratio));
+  const adj = Math.max(timeMs, scoreFloorMs(modeKey)) / 1000 + hints * 15 + mistakes * 3;
+  const ratio = m.par / Math.max(1, adj);
+  const mult = ratio <= OVERDRIVE_AT ? ratio : OVERDRIVE_AT + Math.log(ratio / OVERDRIVE_AT);
+  const score = Math.max(10, Math.round(m.base * mult));
+  const ceiling = Math.round(m.base * OVERDRIVE_AT);
+  return { score, ceiling, overdrive: Math.max(0, score - ceiling), mult };
 }
+export function computeScore(modeKey, timeMs, hints, mistakes) { return scoreBreakdown(modeKey, timeMs, hints, mistakes).score; }
 
 export function gridToString(g) { return g.map(v => v.toString(36)).join(''); }
 export function stringToGrid(s) { return [...s].map(ch => parseInt(ch, 36)); }

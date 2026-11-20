@@ -2,6 +2,13 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-20 — "Overdrive"
+- ⚡ No more points cap (player question, ticket #11: "Why is there a points cap of 10,000 points?"). Scores used to stop at 2.5× par (Easy 1,250 · Medium 2,250 · Hard 3,750 · Expert 10,000), so a 3:00 Expert and a 2:30 Expert both showed 10,000. Now every second past that pace line still scores, on a gentler curve (Expert 3:00 ≈ 10,730, 2:30 ≈ 11,460). Scores below the line are unchanged.
+- The win screen shows your **⚡ Overdrive +N** bonus with a glow when you beat the pace line.
+- Times faster than the server's believable-solve floor (450 ms per empty tile) score as that floor, so the top possible score per size stays sane (Expert ≈ 17,900).
+- Leaderboard scores that were stuck at the old cap were recomputed from their stored time, hints and clashes with the new formula.
+- How to play has a new "How scoring works" section with par, base and pace line for every size (plus FAQ markup); the in-page guide links to it.
+
 ## 2026-11-18 — "Print & Play"
 - 🖨️ New free printable worksheets at /printable/ (footer link, How to play guide). Pick Easy 4×4, Medium 5×5, Hard 6×6 or Expert 9×9, and 1, 2, 4 or 6 boards per sheet. Every board has one solution, and every tile carries a symbol so it reads in black and white and for colorblind players.
 - Two styles: Full color, or Crayon (low ink), which prints the starting tiles as colored outlines with a color key so kids color in every tile. An answer key prints on its own page, and you can turn it off.

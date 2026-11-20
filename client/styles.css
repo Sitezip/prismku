@@ -200,3 +200,8 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 .board.spot .cell.open.sel{background:color-mix(in srgb, var(--spot) 26%, rgba(255,255,255,.08))}
 .qd-promo{display:block;max-width:520px;margin:14px auto 4px;padding:10px 14px;border-radius:14px;text-align:center;text-decoration:none;color:var(--text);background:linear-gradient(135deg,color-mix(in srgb,var(--c1) 30%,transparent),color-mix(in srgb,var(--c3) 25%,transparent),color-mix(in srgb,var(--c4) 25%,transparent),color-mix(in srgb,var(--c2) 30%,transparent));border:1px solid var(--line)}
 .qd-promo:hover{border-color:var(--accent)}
+
+/* ⚡ Overdrive score (past 2.5× par) */
+.big.overdrive{text-shadow:0 0 14px color-mix(in srgb,var(--c3) 60%,transparent)}
+.od-note{text-align:center;margin:.1em 0 .4em;font-size:14px}
+.od-note b{background:linear-gradient(90deg,var(--c3),var(--c1),var(--c6));-webkit-background-clip:text;background-clip:text;color:transparent}

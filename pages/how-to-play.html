@@ -10,6 +10,7 @@
 {"@type":"Question","name":"Do I need to know math to play?","acceptedAnswer":{"@type":"Answer","text":"No. The digits are replaced by colors, so it is pure logic: you only need to notice which colors are already used in a row, column or box."}},
 {"@type":"Question","name":"How big are the boards?","acceptedAnswer":{"@type":"Answer","text":"Prismku has Easy 4×4 (2×2 boxes), Medium 5×5 (rows and columns only), Hard 6×6 (2×3 boxes) and Expert 9×9 (3×3 boxes). Every puzzle has exactly one solution."}},
 {"@type":"Question","name":"Is there a daily puzzle?","acceptedAnswer":{"@type":"Answer","text":"Yes. Everyone gets the same daily board for each size, refreshed at midnight UTC, with daily, weekly and all-time leaderboards. Free play gives you unlimited extra boards."}},
+{"@type":"Question","name":"How is Rainbow Sudoku scored? Is there a points cap?","acceptedAnswer":{"@type":"Answer","text":"Each size has a par time and a base score. Your score is the base times par divided by your time, where each hint adds 15 seconds and each clash 3 seconds. There is no cap: past 2.5 times par (10,000 points on Expert) Overdrive keeps adding points for every second you save, on a gentler curve."}},
 {"@type":"Question","name":"Is it colorblind friendly?","acceptedAnswer":{"@type":"Answer","text":"Yes. Turn on colorblind mode to show a distinct symbol on every color."}}]}
 </script>
 <style>body{margin:0;background:#120b2e;color:#f6f1ff;font:17px/1.6 system-ui,sans-serif}main{max-width:720px;margin:0 auto;padding:24px 18px 48px}a{color:#ffd60a}
@@ -53,6 +54,14 @@ h2{margin-top:32px}.cta{display:inline-block;margin:8px 0;padding:12px 22px;bord
 <p><a href="/quick-draw/">Quick Draw</a> is a reaction game built on one Easy box. After a random wait, a 2×2 box with red, blue, yellow and green appears with one tile empty; tap the missing color as fast as you can. Times are shown to the millisecond, tapping early is a false start, and a wrong color adds a second. Set a nickname to join the daily and all-time leaderboards.</p>
 <h2>Daily puzzle and scoring</h2>
 <p>Everyone in the world gets the same daily board for each size, refreshed at midnight UTC. Your score rewards speed and clean play, and fewer hints and clashes means more points. Add a nickname to join the daily, weekly and all-time leaderboards, keep a streak, and share a spoiler-free emoji grid of your result. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> badge, and share your streak from the calendar.</p>
+<h2 id="scoring">How scoring works (and why there’s no points cap)</h2>
+<p>Every size has a par time and a base score. Your time is adjusted (+15 seconds per hint, +3 seconds per clash), then <b>score = base × par ÷ adjusted time</b>. Solve right at par and you get the base; twice as fast, double. Ties on the leaderboard go to the faster time.</p>
+<table><tr><th>Level</th><th>Par</th><th>Base</th><th>Pace line (2.5× par)</th></tr>
+<tr><td>Easy 4×4</td><td>0:25</td><td>500</td><td>1,250 pts at 0:10</td></tr>
+<tr><td>Medium 5×5</td><td>1:00</td><td>900</td><td>2,250 pts at 0:24</td></tr>
+<tr><td>Hard 6×6</td><td>2:00</td><td>1,500</td><td>3,750 pts at 0:48</td></tr>
+<tr><td>Expert 9×9</td><td>9:00</td><td>4,000</td><td>10,000 pts at 3:36</td></tr></table>
+<p><b>⚡ Overdrive.</b> Scores used to stop at the pace line, so an Expert solve in 3:00 and one in 2:30 both showed 10,000. Now every second past the line still counts, on a gentler curve: an Expert solve in 3:00 scores about 10,730 and one in 2:30 about 11,460. The win screen shows your Overdrive bonus. The server clock still checks every ranked time, so the fastest believable solves top out a little under twice the line.</p>
 <a class="cta" href="/">Start playing</a>
 <p style="margin-top:32px;color:#b9aedb;font-size:14px">Prismku is free, needs no sign-up, and works offline once loaded. <a href="/versions/">See how it has evolved</a>.</p>
 </main></body></html>
