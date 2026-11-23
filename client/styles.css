@@ -205,3 +205,16 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 .big.overdrive{text-shadow:0 0 14px color-mix(in srgb,var(--c3) 60%,transparent)}
 .od-note{text-align:center;margin:.1em 0 .4em;font-size:14px}
 .od-note b{background:linear-gradient(90deg,var(--c3),var(--c1),var(--c6));-webkit-background-clip:text;background-clip:text;color:transparent}
+/* 🎞️ solve replay */
+.rp-board{--n:4;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3px;width:min(300px,78vw);aspect-ratio:1;margin:6px auto 4px;padding:5px;background:var(--bg2);border-radius:12px;transition:box-shadow .4s}
+.rp-cell{position:relative;display:grid;place-items:center;border-radius:5px;background:rgba(255,255,255,.06)}
+.rp-cell.bl{margin-left:3px}.rp-cell.bt{margin-top:3px}
+.rp-cell.given,.rp-cell.filled{background:var(--col)}
+.rp-cell.given::after{content:"";position:absolute;width:20%;aspect-ratio:1;border-radius:50%;background:rgba(0,0,0,.28);top:10%;right:10%}
+.rp-cell.pop{animation:pop .25s}
+.rp-cell.wrong{outline:2px dashed #fff;outline-offset:-4px;opacity:.75}
+.rp-cell.hint{box-shadow:inset 0 0 0 3px #ffd60a}
+.rp-cell svg{width:50%;height:50%;fill:rgba(0,0,0,.45);opacity:0}
+body.cb .rp-cell svg{opacity:1}
+.rp-board.done{box-shadow:0 0 0 3px var(--c3),0 0 26px var(--c6)}
+.rp-meta{text-align:center;margin:.3em 0;font-variant-numeric:tabular-nums}

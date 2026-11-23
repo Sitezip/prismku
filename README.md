@@ -17,6 +17,7 @@ spoiler-free share grids.
 - Global daily / weekly / all-time leaderboards, achievements, community highlights feed
 - Wordle-style share text: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint
 - **Dare a friend:** every Free play board has a challenge link (`prismku.com/c/<code>`) that loads the exact puzzle with your time to beat; the Worker gives it its own link preview (“Can you beat 1:23 on this Prismku Hard 6×6?”)
+- 🎞️ Solve replay: after a win, watch your whole solve again on a mini board, sped up, wrong turns and hints included
 - ⚡ Quick Draw reaction mode at `/quick-draw/`
 - 🖨️ Printable worksheets at `/printable/` (every size, color or low-ink crayon style, answer keys, play-online links)
 - ⚡ Uncapped scoring: base × par ÷ time, with Overdrive past 2.5× par ([how scoring works](https://prismku.com/how-to-play/#scoring))

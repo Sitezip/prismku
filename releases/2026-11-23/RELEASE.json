@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-23",
+  "title": "Replay",
+  "notes": [
+    "🎞️ Solve replay: watch your whole solve again after a win, wrong turns and hints included",
+    "Every page links to Feedback & bugs, including Quick Draw (ticket #12)",
+    "npm run test:e2e runs all browser/API tests against a local server"
+  ],
+  "frozenAt": "2026-11-23T19:06:27.933Z"
+}

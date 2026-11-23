@@ -2,6 +2,11 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-23 — "Replay"
+- 🎞️ Watch your solve. After you win, tap **🎞️ Replay** on the result screen (or the Replay link under a solved board) and your whole solve plays back on a mini board in a few seconds, in the order you played it, with the clock running alongside. Tiles that were wrong at the time show dashed, hints get a gold ring, and the caption counts moves, fixes and hints. Long thinking pauses are shortened so the rhythm stays but nothing drags. It works for the daily, Free play, challenges and replays, and survives a reload. Boards started before this update have no recording, so they show no Replay button.
+- 🐞 Every page now links to Feedback & bugs (player bug report, ticket #12: the Quick Draw footer had no bug report link). Quick Draw's footer matches the home page, and How to play, Printable puzzles, Version history and the 404 page share one site footer (it stays off printed worksheets).
+- Developer: `npm run test:e2e` starts a local server and runs every browser/API test (the exploit test failed only because it needs a running server); the Rainbow Lines browser test no longer fails on boards where an earlier tile already finishes a column or box.
+
 ## 2026-11-20 — "Overdrive"
 - ⚡ No more points cap (player question, ticket #11: "Why is there a points cap of 10,000 points?"). Scores used to stop at 2.5× par (Easy 1,250 · Medium 2,250 · Hard 3,750 · Expert 10,000), so a 3:00 Expert and a 2:30 Expert both showed 10,000. Now every second past that pace line still scores, on a gentler curve (Expert 3:00 ≈ 10,730, 2:30 ≈ 11,460). Scores below the line are unchanged.
 - The win screen shows your **⚡ Overdrive +N** bonus with a glow when you beat the pace line.

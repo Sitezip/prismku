@@ -7,6 +7,7 @@ import { paceState, beatBy } from './pace.js';
 import { spotlight, focusColor } from './spotlight.js';
 import { completedUnits, sweepOrder } from './sweep.js';
 import { challengeFromLocation, challengeUrl, challengeVerdict, challengeTitle, marginText, rememberSeed, seenSeed } from './challenge.js';
+import { logMove, boardAt, replayable, schedule, replayStats } from './replay.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -107,7 +108,7 @@ function newGame(play, mode, seed) {
   else {
     const p = generate(mode, seed);
     G = { play, mode, seed: p.seed, day, number: dayNumber(day), puzzle: p.puzzle, solution: p.solution, grid: p.puzzle.slice(),
-      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], result: null, seen: false };
+      places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], log: [], result: null, seen: false };
   }
   G.key = key; G.startedAt = performance.now();
   sel = -1; brush = 0;
@@ -117,7 +118,7 @@ function newGame(play, mode, seed) {
 }
 function restore(s) {
   const p = generate(s.mode, s.seed);
-  const g = { ...s, notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution };
+  const g = { ...s, log: Array.isArray(s.log) ? s.log : [], notes: Array.isArray(s.notes) && s.notes.length === p.puzzle.length ? s.notes : p.puzzle.map(() => 0), puzzle: p.puzzle, solution: p.solution };
   // Restart on a solved free-play board used to wipe the tiles and leave `done` set (ticket #6).
   if (clearedWhileSolved(g.done, isSolved(g.grid, p.puzzle, s.mode))) g.done = false;
   // Progress saved before the anti-pause fix has no `seen` flag: any played board counts as seen.
@@ -297,7 +298,7 @@ function place(i, v) {
   const prev = G.grid[i];
   if (prev === v) return;
   G.hist.push({ i, prev, places: G.places[i], hinted: G.hinted[i] });
-  G.grid[i] = v; G.moves++;
+  G.grid[i] = v; G.moves++; logMove(G.log, elapsed(), i, v);
   if (v) {
     G.places[i]++; clearPeerNotes(i, v);
     const bad = conflicts(G.grid, G.mode);
@@ -326,7 +327,7 @@ function lineSweep(i) {
 function undo() {
   if (G.done || !G.hist.length) return;
   const h = G.hist.pop();
-  G.grid[h.i] = h.prev; G.places[h.i] = h.places; G.hinted[h.i] = h.hinted; G.moves++;
+  G.grid[h.i] = h.prev; G.places[h.i] = h.places; G.hinted[h.i] = h.hinted; G.moves++; logMove(G.log, elapsed(), h.i, h.prev);
   sel = h.i; sfx.erase(); render(false); persist();
 }
 
@@ -345,7 +346,7 @@ function hint() {
   }
   if (target < 0) return;
   G.hist.push({ i: target, prev: G.grid[target], places: G.places[target], hinted: G.hinted[target] });
-  G.grid[target] = G.solution[target]; clearPeerNotes(target, G.solution[target]); G.hinted[target] = true; G.hints++; G.moves++; sel = target;
+  G.grid[target] = G.solution[target]; clearPeerNotes(target, G.solution[target]); G.hinted[target] = true; G.hints++; G.moves++; logMove(G.log, elapsed(), target, G.solution[target], true); sel = target;
   sfx.hint(); render(false); persist();
   if (step) {
     // Explained hint: glow the tiles that prove it for a few seconds.
@@ -362,7 +363,7 @@ function restart() {
   if (!canRestart(G.done)) return toast(G.play === 'daily' ? 'Today’s daily is solved — try Free play!' : 'This board is solved — tap ✨ New for another.');
   const fresh = restartResetsClock(G.play);
   if (!confirm(fresh ? 'Restart this puzzle with a fresh timer? Restarted runs are practice and stay off the leaderboard.' : 'Restart this puzzle? Your timer keeps running.')) return;
-  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; sel = -1; brush = 0;
+  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; G.log = []; sel = -1; brush = 0;
   // Ticket #10: Free play restarts the clock and counters; the run becomes practice (see gesture.js).
   if (fresh) { G.elapsed = 0; G.startedAt = performance.now(); G.moves = G.hints = G.mistakes = 0; G.practice = true; }
   render(false); persist();
@@ -533,9 +534,41 @@ function showWin() {
     <pre class="share-pre">${esc(shareText())}</pre>
     <div class="row"><button class="btn primary" data-act="share">Share result</button>
     <button class="btn" data-act="share-img">🖼️ Image</button>${G.play === 'free' ? '<button class="btn" data-act="dare">⚔️ Dare a friend</button>' : ''}
-    <button class="btn" data-act="calendar">📅 Calendar</button><button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
+    ${canReplay() ? '<button class="btn" data-act="replay">🎞️ Replay</button>' : ''}<button class="btn" data-act="calendar">📅 Calendar</button><button class="btn" data-act="next">${G.play === 'daily' ? 'Free play' : 'Next puzzle'}</button>
     <button class="btn" data-act="lb">Leaderboard</button>
     <button class="btn" data-act="feedback">💬 Feedback</button></div>`);
+}
+
+// 🎞️ Solve replay: after a win, watch your whole solve again on a mini board, sped up, wrong turns and hints included.
+function canReplay() { return !!G && G.done && replayable(G.puzzle, G.solution, G.log); }
+function showReplay() {
+  if (!canReplay()) return;
+  const m = MODES[G.mode], n = m.size, log = G.log.slice(), at = schedule(log), st = replayStats(log);
+  const [br, bc] = m.box || [0, 0];
+  const cells = G.puzzle.map((v, i) => {
+    const r = Math.floor(i / n), c = i % n;
+    const edge = (bc && c && c % bc === 0 ? ' bl' : '') + (br && r && r % br === 0 ? ' bt' : '');
+    return `<i class="rp-cell${v ? ' given' : ''}${edge}" data-i="${i}"${v ? ` style="--col:var(--c${v})"` : ''}>${v ? svg(v) : ''}</i>`;
+  }).join('');
+  openDlg(`<button class="btn x" data-act="close" aria-label="Close">✕</button>
+    <h3>🎞️ Solve replay</h3>
+    <div class="rp-board" id="rp-board" style="--n:${n}" role="img" aria-label="Replay of your ${m.label} solve">${cells}</div>
+    <p class="rp-meta"><span id="rp-clock">0:00</span> · <span id="rp-step">0</span>/${st.steps} moves${st.redo ? ` · ${st.redo} fix${st.redo > 1 ? 'es' : ''}` : ''}${st.hints ? ` · ${st.hints} hint${st.hints > 1 ? 's' : ''}` : ''}</p>
+    <p class="tip" style="text-align:center">Your ${m.label} solve, sped up. Dashed tiles were wrong at that moment; 💡 rings were hints.</p>
+    <div class="row"><button class="btn primary" data-act="replay">↻ Watch again</button><button class="btn" data-act="showwin">Back to result</button></div>`);
+  const token = dlgState.token, board = $('#rp-board');
+  log.forEach(([ms, i, v, h], k) => setTimeout(() => {
+    if (dlgState.token !== token || !board.isConnected) return;
+    const el = board.querySelector(`[data-i="${i}"]`);
+    if (el) {
+      el.className = el.className.replace(/ (filled|wrong|hint|pop)/g, '');
+      if (v) { el.classList.add('filled', 'pop'); el.style.setProperty('--col', `var(--c${v})`); el.innerHTML = svg(v); if (v !== G.solution[i]) el.classList.add('wrong'); if (h) el.classList.add('hint'); }
+      else { el.style.removeProperty('--col'); el.innerHTML = ''; }
+    }
+    $('#rp-clock').textContent = fmt(ms); $('#rp-step').textContent = k + 1;
+    if (k === log.length - 1) { $('#rp-clock').textContent = fmt(G.elapsed); board.classList.add('done'); sfx.win(); }
+    else if (v) sfx.place(v);
+  }, at[k] + 350));
 }
 
 function showDoneState() {
@@ -544,7 +577,7 @@ function showDoneState() {
     const rainbow = isFullRainbow(d, G.day)
       ? '🌈 Full Rainbow today!'
       : next ? `🌈 ${n}/4 — try <a href="#" data-act="next-mode" data-mode="${next}">${MODES[next].label}</a> next` : '';
-    $('#tip').innerHTML = `Solved in ${fmt(G.elapsed)}${rainbow ? ' · ' + rainbow : ''} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a> · <a href="#" data-act="calendar">📅 Past dailies</a>`;
+    $('#tip').innerHTML = `Solved in ${fmt(G.elapsed)}${rainbow ? ' · ' + rainbow : ''} — new daily in <span id="countdown"></span>. <a href="#" data-act="showwin">See result</a>${canReplay() ? ' · <a href="#" data-act="replay">🎞️ Replay</a>' : ''} · <a href="#" data-act="calendar">📅 Past dailies</a>`;
   } else if (G.replay) {
     $('#tip').innerHTML = 'Replay solved! <a href="#" data-act="calendar">📅 Pick another day</a> or tap ✨ New.';
   } else {
@@ -728,6 +761,7 @@ function showHelp() {
     <p>🔦 <b>Spotlight:</b> pick a color (or tap a colored tile) and every tile of that color gets a ring, while empty tiles it can't go in fade out. The bright empty tiles are the only places it can still go.</p>
     <p>⚔️ <b>Dare a friend:</b> after a Free play solve, tap ⚔️ Dare a friend (or Share) for a link to that exact board with your time to beat.</p>
     <p>🌈 <b>Rainbow lines:</b> finish a row, column or box with every color once and it shimmers with a little chime. It only checks the rules, not the answer.</p>
+    <p>🎞️ <b>Solve replay:</b> after a win, tap <b>Replay</b> to watch your whole solve again in a few seconds, wrong turns and hints included.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
@@ -843,6 +877,7 @@ $('#dlg').addEventListener('click', async e => {
   const cd = e.target.closest('[data-calday]');
   if (cd) return replayDaily(cd.dataset.calday);
   if (a === 'calendar') return showCalendar();
+  if (a === 'replay') return showReplay();
   if (a === 'share') share();
   if (a === 'share-streak') shareStreak();
   if (a === 'share-img') shareImage();
@@ -858,6 +893,7 @@ $('#dlg').addEventListener('click', async e => {
 });
 document.addEventListener('click', e => {
   if (e.target.closest('[data-act="showwin"]')) { e.preventDefault(); showWin(); }
+  if (!e.target.closest('#dlg') && e.target.closest('[data-act="replay"]')) { e.preventDefault(); showReplay(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="calendar"]')) { e.preventDefault(); showCalendar(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="feedback"]')) { e.preventDefault(); showFeedback(); }
   if (!e.target.closest('#dlg') && e.target.closest('[data-act="dare"]')) { e.preventDefault(); dare(); }
@@ -919,5 +955,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, toast, resultCard, showCalendar, replayDaily, startChallenge, shareText, dareText, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, place, hint, undo, showReplay, canReplay, toast, resultCard, showCalendar, replayDaily, startChallenge, shareText, dareText, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
 })();

@@ -11,16 +11,17 @@ const r = await p.evaluate(async () => {
   const empties = [];
   for (let c = 0; c < n; c++) if (!g.puzzle[c]) empties.push(c);
   for (const c of empties.slice(0, -1)) k.place(c, g.solution[c]);
-  const before = document.querySelectorAll('#board .cell.sweep').length;
+  // (placing an earlier tile may already finish a column or box, so only check that this row isn't lit yet)
+  const before = [...document.querySelectorAll('#board .cell.sweep')].map(e => +e.dataset.i).filter(i => i < n).length;
   const last = empties.at(-1); k.place(last, g.solution[last]);
   await new Promise(r => setTimeout(r, 50));
   const lit = [...document.querySelectorAll('#board .cell.sweep')].map(e => +e.dataset.i);
   return { before, lit, n, empties: empties.length };
 });
 console.log(r);
-assert.equal(r.before, 0);
+assert.ok(r.before < r.n, 'row not complete before its last tile');
 for (let c = 0; c < r.n; c++) assert.ok(r.lit.includes(c), 'row tile ' + c);
 await p.screenshot({ path: '/tmp/sweep.png' });
-await new Promise(r => setTimeout(r, 1800));
+await new Promise(r => setTimeout(r, 2200));
 assert.equal(await p.$$eval('#board .cell.sweep', x => x.length), 0);
 assert.deepEqual(errs, []); await b.close(); console.log('sweep ui ok');

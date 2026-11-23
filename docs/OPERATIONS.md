@@ -10,7 +10,7 @@
 2. Improve `client/` (+ `src/worker.js` / new `migrations/000N_*.sql` if needed).
 3. Bump `version` in `client/config.js` and `CACHE` in `client/sw.js` to today (YYYY-MM-DD).
 4. Add a CHANGELOG entry, then freeze: `node scripts/release.mjs YYYY-MM-DD "Title" "note|note"`.
-5. Test: `npm test`, local `wrangler dev`, `test/api.test.mjs`, `test/ui.test.mjs`.
+5. Test: `npm test` (unit), then `npm run test:e2e` (starts `wrangler dev` on :8787 with the local D1 and runs every browser/API test; `ONLY=ui,api` for a subset, `BASE=https://prismku.com` against live — careful, that writes test scores).
 6. Deploy (one of):
    - **Git push to `main`** (Workers Builds: `npm test` → `npx wrangler deploy`) → `wrangler deploy` using `wrangler.toml` (real static assets).
    - **API-only** (agent connector, no token): `node scripts/build.mjs && node scripts/deploy-mcp.mjs`, then run the
