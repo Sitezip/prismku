@@ -2,6 +2,13 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-25 — "Multi-select Notes"
+- 🔲 Pencil notes in several tiles at once (player request, ticket #13: "multiple select"). With ✏️ Notes on, drag your finger or mouse across tiles, or Ctrl/Shift/⌘-click them on a computer, and they light up gold with a "N tiles selected" bar. Tap a color (or press its number) and that color's dot goes into every selected empty tile; tap it again and it comes out of all of them. 🧽 Erase (or Backspace) clears their notes. Tap a single tile, ✕ Done, or Esc to go back to one tile.
+- Colors never get placed in a multi-selection, only pencilled, so a stray tap can't flood a row with one color. Notes stay unscored and survive a reload.
+- On phones the board only captures drags while Notes is on; with Notes off the page scrolls as before.
+- How to play, the in-game guide and README describe multi-select.
+- Tests: `test/multisel.test.mjs` (unit) and `test/multisel-ui.test.mjs` (mouse drag, touch drag, Ctrl-click, keyboard, erase, reload).
+
 ## 2026-11-23 — "Replay"
 - 🎞️ Watch your solve. After you win, tap **🎞️ Replay** on the result screen (or the Replay link under a solved board) and your whole solve plays back on a mini board in a few seconds, in the order you played it, with the clock running alongside. Tiles that were wrong at the time show dashed, hints get a gold ring, and the caption counts moves, fixes and hints. Long thinking pauses are shortened so the rhythm stays but nothing drags. It works for the daily, Free play, challenges and replays, and survives a reload. Boards started before this update have no recording, so they show no Replay button.
 - 🐞 Every page now links to Feedback & bugs (player bug report, ticket #12: the Quick Draw footer had no bug report link). Quick Draw's footer matches the home page, and How to play, Printable puzzles, Version history and the 404 page share one site footer (it stays off printed worksheets).

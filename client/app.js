@@ -2,6 +2,7 @@ import { MODES, MODE_KEYS, generate, conflicts, isSolved, peers, regionOf, daily
 import { paletteTap, canRestart, clearedWhileSolved, restartResetsClock } from './gesture.js';
 import { CONFIG } from './config.js';
 import { fillNotes } from './notes.js';
+import { toggleNoteMany, clearNotesMany, toggleInSelection, extendDrag } from './multisel.js';
 import { nextStep, explain } from './logic.js';
 import { paceState, beatBy } from './pace.js';
 import { spotlight, focusColor } from './spotlight.js';
@@ -92,6 +93,7 @@ let G = null;          // current game
 let sel = -1;          // selected cell
 let brush = 0;         // armed color
 let notesOn = false;   // pencil-mark mode
+let multi = new Set(); // multi-select (2+ tiles): colors become pencil dots in all of them (ticket #13)
 let serverDay = utcDay();
 let tick = null;
 let whyTiles = new Set(), whyFor = null; // tiles glowing to explain the last hint
@@ -111,7 +113,7 @@ function newGame(play, mode, seed) {
       places: p.puzzle.map(() => 0), hinted: p.puzzle.map(() => false), notes: p.puzzle.map(() => 0), moves: 0, hints: 0, mistakes: 0, elapsed: 0, done: false, hist: [], log: [], result: null, seen: false };
   }
   G.key = key; G.startedAt = performance.now();
-  sel = -1; brush = 0;
+  sel = -1; brush = 0; multi = new Set();
   settings.play = play; settings.mode = mode; saveSettings();
   render(true); startTimer(); updatePaused();
   if (G.done) showDoneState(); else if (G.seen) sendStart();
@@ -224,7 +226,9 @@ function render(full) {
     $('#daily-no').textContent = '#' + dayNumber(serverDay);
   }
   const bad = conflicts(G.grid, G.mode), P = peers(G.mode);
-  const peerSet = new Set(sel >= 0 ? P[sel] : []);
+  if (G.done) multi = new Set();
+  const many = multi.size > 1;
+  const peerSet = new Set(sel >= 0 && !many ? P[sel] : []);
   // Spotlight: the color in focus rings its tiles and dims the empty tiles it can't go in.
   const focus = G.done ? 0 : focusColor(brush, G.grid, sel);
   const spot = spotlight(G.grid, P, focus);
@@ -233,7 +237,7 @@ function render(full) {
   const cells = board.querySelectorAll('.cell');
   cells.forEach((c, i) => {
     const v = G.grid[i], given = !!G.puzzle[i];
-    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel ? ' sel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '') + (spot.same.has(i) ? ' same' : '') + (spot.blocked.has(i) ? ' blocked' : '') + (spot.open.has(i) ? ' open' : '') + (c.classList.contains('sweep') ? ' sweep' : '');
+    c.className = 'cell' + (v ? ' filled' : ' empty') + (given ? ' given' : '') + (bad.has(i) ? ' bad' : '') + (i === sel && !many ? ' sel' : '') + (many && multi.has(i) ? ' msel' : '') + (peerSet.has(i) ? ' peer' : '') + (G.hinted[i] ? ' hinted' : '') + (whyFor === G && whyTiles.has(i) ? ' why' : '') + (spot.same.has(i) ? ' same' : '') + (spot.blocked.has(i) ? ' blocked' : '') + (spot.open.has(i) ? ' open' : '') + (c.classList.contains('sweep') ? ' sweep' : '');
     if (v) c.style.setProperty('--col', `var(--c${v})`); else c.style.removeProperty('--col');
     const nm = !v && G.notes ? G.notes[i] : 0;
     c.classList.toggle('noted', !!nm);
@@ -265,6 +269,9 @@ function render(full) {
   $('#btn-notes').setAttribute('aria-pressed', notesOn); $('#btn-notes').classList.toggle('on', notesOn);
   document.body.classList.toggle('notes-on', notesOn);
   $('#btn-autonotes').hidden = !notesOn || !canRestart(G.done);
+  board.classList.toggle('multi', many);
+  const mb = $('#multi-bar');
+  if (mb) { mb.hidden = !many; if (many) mb.querySelector('b').textContent = `${multi.size} tiles selected`; }
 }
 
 function noteDots(mask, n) {
@@ -278,6 +285,20 @@ function toggleNote(i, v) {
   if (G.done || i < 0 || G.puzzle[i] || G.grid[i]) return;
   G.notes[i] ^= (1 << v); tone(SCALE[v] * 2, 0.06, 'sine', 0.05); render(false); persist();
 }
+// Multi-select: one color tap pencils (or un-pencils) that color in every selected empty tile.
+function noteMany(v) {
+  if (G.done) return;
+  const r = toggleNoteMany(G.grid, G.puzzle, G.notes, [...multi], v);
+  if (r.action === 'none') return toast('Pick empty tiles to pencil in', 1500);
+  G.notes = r.notes; tone(SCALE[v] * 2, 0.06, 'sine', 0.05); render(false); persist();
+  toast(`${r.action === 'add' ? '✏️ Added' : '🧽 Removed'} ${COLOR_NAMES[v]} ${r.action === 'add' ? 'to' : 'from'} ${r.count} tile${r.count === 1 ? '' : 's'}`, 1400);
+}
+function eraseMany() {
+  const r = clearNotesMany(G.grid, G.puzzle, G.notes, [...multi]);
+  G.notes = r.notes; render(false); persist();
+  toast(r.count ? `🧽 Cleared notes in ${r.count} tile${r.count === 1 ? '' : 's'}` : 'No notes in those tiles', 1400);
+}
+function clearMulti() { if (multi.size) { multi = new Set(); render(false); } }
 function clearPeerNotes(i, v) {
   if (!G.notes) return; const bit = 1 << v;
   for (const p of peers(G.mode)[i]) G.notes[p] &= ~bit;
@@ -363,7 +384,7 @@ function restart() {
   if (!canRestart(G.done)) return toast(G.play === 'daily' ? 'Today’s daily is solved — try Free play!' : 'This board is solved — tap ✨ New for another.');
   const fresh = restartResetsClock(G.play);
   if (!confirm(fresh ? 'Restart this puzzle with a fresh timer? Restarted runs are practice and stay off the leaderboard.' : 'Restart this puzzle? Your timer keeps running.')) return;
-  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; G.log = []; sel = -1; brush = 0;
+  G.grid = G.puzzle.slice(); G.places = G.puzzle.map(() => 0); G.hinted = G.puzzle.map(() => false); G.notes = G.puzzle.map(() => 0); G.hist = []; G.log = []; sel = -1; brush = 0; multi = new Set();
   // Ticket #10: Free play restarts the clock and counters; the run becomes practice (see gesture.js).
   if (fresh) { G.elapsed = 0; G.startedAt = performance.now(); G.moves = G.hints = G.mistakes = 0; G.practice = true; }
   render(false); persist();
@@ -763,6 +784,7 @@ function showHelp() {
     <p>🌈 <b>Rainbow lines:</b> finish a row, column or box with every color once and it shimmers with a little chime. It only checks the rules, not the answer.</p>
     <p>🎞️ <b>Solve replay:</b> after a win, tap <b>Replay</b> to watch your whole solve again in a few seconds, wrong turns and hints included.</p>
     <p>✏️ <b>Notes</b> mode turns colors into tiny pencil dots so you can track which colors could still fit a tile. Placing a color wipes that dot from its row, column and box. (Keyboard: N, or Shift+number.) With Notes on, <b>✨ Fill all notes</b> (keyboard: F) pencils every color that still fits each empty tile, so you can start erasing straight away.</p>
+    <p>🔲 <b>Select several tiles</b>: with Notes on, drag across tiles (or Ctrl/Shift/⌘-click them on a computer), then tap a color to pencil it into every selected empty tile at once. Tap it again to take it back out of all of them; 🧽 Erase clears their notes. Tap any tile or press Esc to go back to one tile.</p>
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
@@ -817,15 +839,37 @@ async function loadCommunity() {
 }
 
 // ---------- events ----------
-function selectCell(i) {
+function selectCell(i, add) {
   if (G.done) return;
+  if (add && !brush) { multi = toggleInSelection(multi, sel, i); sel = i; render(false); return; }
+  multi = new Set();
   if (brush && !G.puzzle[i]) { if (notesOn && !G.grid[i]) toggleNote(i, brush); else place(i, G.grid[i] === brush ? 0 : brush); sel = i; render(false); return; }
   sel = sel === i ? -1 : i; render(false);
 }
-$('#board-wrap').addEventListener('click', e => { const c = e.target.closest('.cell'); if (c) selectCell(+c.dataset.i); });
+$('#board-wrap').addEventListener('click', e => {
+  if (dragSel.swallow) { dragSel.swallow = false; return; }
+  const c = e.target.closest('.cell'); if (c) selectCell(+c.dataset.i, e.ctrlKey || e.metaKey || e.shiftKey);
+});
+// With Notes on, drag across tiles to select several (the board stops scrolling the page only in Notes mode).
+const dragSel = { on: false, start: -1, moved: false, swallow: false };
+const cellAt = (x, y) => { const c = document.elementFromPoint(x, y)?.closest?.('#board .cell'); return c ? +c.dataset.i : -1; };
+$('#board-wrap').addEventListener('pointerdown', e => {
+  const c = e.target.closest('.cell'); dragSel.swallow = false;
+  if (!c || !G || G.done || !notesOn || brush || e.button > 0) return;
+  dragSel.on = true; dragSel.start = +c.dataset.i; dragSel.moved = false;
+});
+$('#board-wrap').addEventListener('pointermove', e => {
+  if (!dragSel.on) return;
+  const i = cellAt(e.clientX, e.clientY); if (i < 0) return;
+  if (!dragSel.moved) { if (i === dragSel.start) return; dragSel.moved = true; multi = new Set([dragSel.start]); }
+  if (!multi.has(i)) { multi = extendDrag(multi, i); sel = i; render(false); }
+});
+const endDrag = () => { if (dragSel.on && dragSel.moved) { dragSel.swallow = true; setTimeout(() => { dragSel.swallow = false; }, 400); if (multi.size > 1) toast(`${multi.size} tiles selected — tap a color to pencil it in all`, 1600); } dragSel.on = false; };
+window.addEventListener('pointerup', endDrag); window.addEventListener('pointercancel', () => { dragSel.on = false; });
+$('#multi-clear')?.addEventListener('click', clearMulti);
 function setBrush(next) {
   const was = brush;
-  brush = next;
+  brush = next; if (brush) multi = new Set();
   // Drop the selection when paint turns off so the next tap on that color arms it again
   // instead of erasing the tile you just painted (ticket #7).
   if (!brush) sel = -1;
@@ -836,6 +880,7 @@ function setBrush(next) {
 $('#palette').addEventListener('click', e => {
   const s = e.target.closest('.swatch'); if (!s || !G) return;
   const v = +s.dataset.v;
+  if (multi.size > 1 && !brush && !G.done) return noteMany(v);
   const act = paletteTap({
     done: G.done, brush, sel, v,
     given: sel >= 0 && !!G.puzzle[sel], notesOn, cellValue: sel >= 0 ? G.grid[sel] : 0,
@@ -848,7 +893,7 @@ $('#paint-stop').onclick = () => { if (brush) setBrush(0); };
 $('#btn-autonotes').onclick = () => autoNotes();
 $('#btn-notes').onclick = () => { notesOn = !notesOn; render(false); toast(notesOn ? '✏️ Notes on — colors become pencil dots' : 'Notes off', 1500); };
 $('#btn-undo').onclick = undo; $('#btn-hint').onclick = hint; $('#btn-restart').onclick = restart;
-$('#btn-erase').onclick = () => { if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
+$('#btn-erase').onclick = () => { if (multi.size > 1) return eraseMany(); if (sel < 0) return toast('Select a tile to erase'); if (!G.grid[sel] && G.notes?.[sel]) { G.notes[sel] = 0; render(false); persist(); } else place(sel, 0); };
 $('#btn-new').onclick = () => { store.del(progressKey('free', G.mode)); newGame('free', G.mode, randomSeed()); $('#tip').textContent = 'Tap a tile, then a color. No color may repeat in a row, column or bold box.'; };
 $('#btn-board').onclick = () => showLeaderboard();
 $('#btn-me').onclick = showMe; $('#btn-help').onclick = showHelp; $('#btn-feedback').onclick = () => showFeedback();
@@ -904,17 +949,19 @@ document.addEventListener('keydown', e => {
   const n = MODES[G.mode].size;
   const k = e.key;
   if (k.startsWith('Arrow')) {
-    e.preventDefault(); if (sel < 0) sel = 0;
+    e.preventDefault(); multi = new Set(); if (sel < 0) sel = 0;
     else { const r = Math.floor(sel / n), c = sel % n; const d = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k]; sel = ((r + d[0] + n) % n) * n + ((c + d[1] + n) % n); }
     render(false);
-  } else if (/^[1-9]$/.test(k) && +k <= n) { if (sel >= 0) { if ((notesOn || e.shiftKey) && !G.grid[sel]) toggleNote(sel, +k); else place(sel, +k); } }
+  } else if (multi.size > 1 && /^Digit[1-9]$/.test(e.code) && +e.code.slice(5) <= n) noteMany(+e.code.slice(5));
+  else if (/^[1-9]$/.test(k) && +k <= n) { if (sel >= 0) { if ((notesOn || e.shiftKey) && !G.grid[sel]) toggleNote(sel, +k); else place(sel, +k); } }
   else if (/^Digit[1-9]$/.test(e.code) && e.shiftKey && +e.code.slice(5) <= n) { if (sel >= 0 && !G.grid[sel]) toggleNote(sel, +e.code.slice(5)); }
   else if (k.toLowerCase() === 'n') $('#btn-notes').click();
   else if (k.toLowerCase() === 'f' && notesOn) autoNotes();
+  else if ((k === 'Backspace' || k === 'Delete' || k === '0') && multi.size > 1) eraseMany();
   else if (k === 'Backspace' || k === 'Delete' || k === '0') { if (sel >= 0) place(sel, 0); }
   else if (k.toLowerCase() === 'z') undo();
   else if (k.toLowerCase() === 'h') hint();
-  else if (k === 'Escape') { sel = -1; brush = 0; render(false); }
+  else if (k === 'Escape') { sel = -1; brush = 0; multi = new Set(); render(false); }
 });
 
 // twinkle: random filled tile blinks now and then
@@ -955,5 +1002,5 @@ function monetization() {
   if (location.hash === '#feedback') showFeedback();
   else if (!store.get('seenHelp', false, 'pk.')) { store.set('seenHelp', true, 'pk.'); showHelp(); }
   if ('serviceWorker' in navigator && !ARCHIVE && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-  window.__prismku = { get G() { return G; }, place, hint, undo, showReplay, canReplay, toast, resultCard, showCalendar, replayDaily, startChallenge, shareText, dareText, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
+  window.__prismku = { get G() { return G; }, get multi() { return [...multi]; }, place, hint, undo, showReplay, canReplay, toast, resultCard, showCalendar, replayDaily, startChallenge, shareText, dareText, streaks, modesCleared, isFullRainbow, rainbowShareLine, streakShareText, elapsed: () => (G ? elapsed() : 0) };
 })();

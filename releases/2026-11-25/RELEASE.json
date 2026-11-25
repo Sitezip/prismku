@@ -1,0 +1,10 @@
+{
+  "day": "2026-11-25",
+  "title": "Multi-select Notes",
+  "notes": [
+    "🔲 Drag across tiles with Notes on (or Ctrl/Shift-click) and one color tap pencils every selected tile (ticket #13)",
+    "Tap the color again to take it out of all of them; Erase clears their notes",
+    "Multi-select only pencils, never places, and phones still scroll with Notes off"
+  ],
+  "frozenAt": "2026-11-25T19:05:41.630Z"
+}

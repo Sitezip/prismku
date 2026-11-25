@@ -13,6 +13,7 @@ spoiler-free share grids.
 - Deterministic, seeded generator — every puzzle has exactly **one** solution (verified by a bitmask solver)
 - Daily puzzle (same seed for everyone, rolls over at 00:00 UTC) + free play
 - Timer, hints, undo, clash highlighting, keyboard support, sound toggle, colorblind symbols, themes
+- ✏️ Pencil notes with ✨ Fill all notes and 🔲 multi-select: drag across tiles (or Ctrl/Shift-click) and one color tap pencils them all
 - Server-verified scores in Cloudflare D1: the Worker regenerates the puzzle from its seed and checks the submitted grid
 - Global daily / weekly / all-time leaderboards, achievements, community highlights feed
 - Wordle-style share text: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint

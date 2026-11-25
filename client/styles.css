@@ -218,3 +218,11 @@ body.paused #hud-time{animation:blink 1.2s steps(2,start) infinite}
 body.cb .rp-cell svg{opacity:1}
 .rp-board.done{box-shadow:0 0 0 3px var(--c3),0 0 26px var(--c6)}
 .rp-meta{text-align:center;margin:.3em 0;font-variant-numeric:tabular-nums}
+/* Multi-select notes (2026-11-25, ticket #13) */
+.multi-bar{position:absolute;left:50%;bottom:100%;transform:translate(-50%,-6px);z-index:6;display:flex;align-items:center;gap:6px;white-space:nowrap;border:2px dashed #ffd60a;border-radius:999px;background:rgba(18,11,46,.94);color:#fff;font-size:14px;line-height:1.2;padding:4px 4px 4px 14px;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+.multi-bar[hidden]{display:none}
+.multi-bar span{opacity:.8}
+.multi-bar button{border:0;border-radius:999px;background:#fff;color:#120b2e;font-weight:700;padding:6px 12px;min-height:32px;cursor:pointer}
+.cell.msel{box-shadow:0 0 0 3px #ffd60a, 0 0 14px #ffd60a;z-index:2;background:rgba(255,214,10,.16)}
+body.notes-on .board{touch-action:none}
+body.notes-on .board .cell{user-select:none;-webkit-user-select:none}
