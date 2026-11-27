@@ -2,7 +2,7 @@
 // feedback & bugs (ticket #12). build.mjs swaps the <!--SITE-FOOTER--> marker for this markup.
 export const MARKER = '<!--SITE-FOOTER-->';
 export const LINKS = [
-  ['/', 'Play Prismku'], ['/how-to-play/', 'How to play'], ['/quick-draw/', 'Quick Draw'],
+  ['/', 'Play Prismku'], ['/daily/', 'Daily archive'], ['/how-to-play/', 'How to play'], ['/quick-draw/', 'Quick Draw'],
   ['/printable/', 'Printable puzzles'], ['/versions/', 'Version history'], ['/#feedback', 'Feedback & bugs'],
 ];
 export const SITE_FOOTER = `<footer class="site-foot" style="max-width:680px;margin:28px auto 0;padding:14px 16px 30px;border-top:1px solid rgba(255,255,255,.14);color:#b9aedb;font:13px/1.7 system-ui,sans-serif;text-align:center">`

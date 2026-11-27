@@ -2,6 +2,14 @@
 
 Every release is frozen and playable at `/v/<date>/` (see `/versions/`).
 
+## 2026-11-27 — "Daily Archive"
+- 🗂️ Every daily puzzle now has its own page. Open **prismku.com/daily/** (footer link, calendar, How to play) for a list of every daily since launch, by month. Each day's page (like `/daily/2026-11-26/`) shows all four boards, Easy 4×4 to Expert 9×9, with colors and colorblind symbols.
+- ▶ **Play this puzzle** opens that exact daily in the game as a practice replay (free-play scoring, no streak change), the same as tapping a past day in the 📅 calendar. On today's page the button opens the real daily.
+- 🔍 **Show the solution** reveals the answer for past days, with the starting tiles solid and the filled-in tiles softer. Today's answers stay hidden until the daily closes.
+- Pages link to the previous and next day, have their own titles, descriptions, link previews and breadcrumbs, and are listed in a new `/daily/sitemap.xml` (referenced from robots.txt), so people searching for a past puzzle can find it.
+- Color buttons ignore double-tap zoom on phones, so a quick tap right after a drag always lands. Developer: the multi-select phone test now waits out the browser's double-tap window (it failed on some days' boards).
+- No new player tickets today; the one open GitHub issue is a third-party directory listing notice, not a game report.
+
 ## 2026-11-25 — "Multi-select Notes"
 - 🔲 Pencil notes in several tiles at once (player request, ticket #13: "multiple select"). With ✏️ Notes on, drag your finger or mouse across tiles, or Ctrl/Shift/⌘-click them on a computer, and they light up gold with a "N tiles selected" bar. Tap a color (or press its number) and that color's dot goes into every selected empty tile; tap it again and it comes out of all of them. 🧽 Erase (or Backspace) clears their notes. Tap a single tile, ✕ Done, or Esc to go back to one tile.
 - Colors never get placed in a multi-selection, only pencilled, so a stray tap can't flood a row with one color. Notes stay unscored and survive a reload.

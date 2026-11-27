@@ -80,7 +80,8 @@ const emptyRun = (p) => p.evaluate(() => { const g = window.__prismku.G; const o
   const pa = await center(p, empties[0]), pc = await center(p, empties[Math.min(5, empties.length - 1)]);
   await p.touchscreen.touchStart(pa.x, pa.y);
   for (let k = 1; k <= 10; k++) await p.touchscreen.touchMove(pa.x + (pc.x - pa.x) * k / 10, pa.y + (pc.y - pa.y) * k / 10);
-  await p.touchscreen.touchEnd(); await wait(200);
+  // Wait past the emulated double-tap window (~300 ms) before the next tap, or Chrome drops its click.
+  await p.touchscreen.touchEnd(); await wait(450);
   const sel = await p.evaluate(() => window.__prismku.multi);
   console.log('touch selected', sel.length);
   assert.ok(sel.length >= 2, 'touch drag selects several tiles');

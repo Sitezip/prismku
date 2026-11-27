@@ -9,6 +9,7 @@ import { spotlight, focusColor } from './spotlight.js';
 import { completedUnits, sweepOrder } from './sweep.js';
 import { challengeFromLocation, challengeUrl, challengeVerdict, challengeTitle, marginText, rememberSeed, seenSeed } from './challenge.js';
 import { logMove, boardAt, replayable, schedule, replayStats } from './replay.js';
+import { replayFromSearch } from './archive.js';
 import { modesCleared, isFullRainbow, nextRainbowMode, rainbowShareLine, streakShareText } from './rainbow.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -751,15 +752,15 @@ function showCalendar() {
     <p class="cal-streak">🔥 Streak <b>${cur}</b> day${cur === 1 ? '' : 's'} · ✨ Best <b>${best}</b>${todayRainbow ? ' · 🌈 Full Rainbow today' : todayCleared.length ? ` · 🌈 ${todayCleared.length}/4 today` : ''}</p>
     <div class="cal-head">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(w => `<span>${w}</span>`).join('')}</div>
     <div class="cal-grid">${cells}</div>
-    <p class="tip">Dots show which sizes you solved: <span class="cal-key"><i class="on" style="--col:var(--c1)"></i>Easy <i class="on" style="--col:var(--c6)"></i>Medium <i class="on" style="--col:var(--c4)"></i>Hard <i class="on" style="--col:var(--c2)"></i>Expert</span>. Hollow dots are replays. Tap a past day to replay its ${esc(MODES[G.mode].label)} puzzle as practice (free-play scoring; only today’s daily counts for streaks and daily ranks). Clear all four sizes for a <b>Full Rainbow</b>.</p>
+    <p class="tip">Dots show which sizes you solved: <span class="cal-key"><i class="on" style="--col:var(--c1)"></i>Easy <i class="on" style="--col:var(--c6)"></i>Medium <i class="on" style="--col:var(--c4)"></i>Hard <i class="on" style="--col:var(--c2)"></i>Expert</span>. Hollow dots are replays. Tap a past day to replay its ${esc(MODES[G.mode].label)} puzzle as practice (free-play scoring; only today’s daily counts for streaks and daily ranks). Clear all four sizes for a <b>Full Rainbow</b>. Every daily, with all four boards and their answers, is in the <a href="/daily/">🗂️ daily archive</a>.</p>
     <div class="row"><button class="btn primary" data-act="share-streak">Share streak</button><button class="btn" data-act="close">Close</button></div>`);
 }
-function replayDaily(day) {
-  if (day >= serverDay) { closeDlg(); return startMode('daily', G.mode); }
+function replayDaily(day, mode = G.mode) {
+  if (day >= serverDay) { closeDlg(); return startMode('daily', mode); }
   persist(); closeDlg();
-  newGame('free', G.mode, dailySeed(day, G.mode));
+  newGame('free', mode, dailySeed(day, mode));
   if (G.replay !== day) { G.replay = day; persist(); }
-  if (!G.done) $('#tip').innerHTML = `📅 Replaying Daily #${dayNumber(day)} (${day}) · ${esc(MODES[G.mode].label)} — practice, free-play scoring.`;
+  if (!G.done) $('#tip').innerHTML = `📅 Replaying Daily #${dayNumber(day)} (${day}) · ${esc(MODES[G.mode].label)} — practice, free-play scoring. <a href="/daily/${day}/">All four boards</a>`;
 }
 
 
@@ -788,7 +789,7 @@ function showHelp() {
     <p>⏱️ <b>Beat your best:</b> once you've solved a size, the Time box shows your personal best (PB). It glows green while you're ahead and pulses gold in the final stretch.</p>
     <p>💡 Hints reveal one correct tile (+15s). ⚡ A clash (duplicate color) adds +3s — clashing tiles pulse red.</p>
     <p>⏱ The clock waits while you read this. Once you’ve seen a board it keeps running until it’s solved, even with a menu open or the tab in the background.</p>
-    <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> — then share your streak.</p>
+    <p>📅 The calendar shows your daily streak; tap a past day to replay a daily you missed, or browse every past puzzle (and its answers) in the <a href="/daily/">daily archive</a>. Clear Easy, Medium, Hard and Expert on the same day for a <b>Full Rainbow</b> — then share your streak.</p>
     <p>🌍 The <b>Daily</b> is the same puzzle for everyone. Share your grid: ⬜ given · 🟩 first try · 🟨 changed · 🟦 hint.</p>
     <p>◐ turns on symbols for colorblind-friendly play. 💬 sends us feedback or a bug report.</p>
     <div class="row"><button class="btn primary" data-act="close">Let’s play</button></div>`);
@@ -996,7 +997,10 @@ function monetization() {
   try { const h = await api('health'); if (h.ok && h.day) serverDay = h.day; } catch {}
   const mode = MODES[settings.mode] ? settings.mode : 'easy';
   const dareIn = ARCHIVE ? null : challengeFromLocation(location.pathname, location.search);
+  // /?replay=<day>&mode=<mode> from a /daily/<day>/ archive page (2026-11-27 "Daily Archive")
+  const replayIn = ARCHIVE || dareIn ? null : replayFromSearch(location.search, CONFIG.launchDay, serverDay);
   if (dareIn) { startChallenge(dareIn); try { history.replaceState(null, '', '/'); } catch {} }
+  else if (replayIn) { replayDaily(replayIn.day, replayIn.mode); try { history.replaceState(null, '', '/'); } catch {} }
   else startMode(settings.play === 'free' ? 'free' : 'daily', mode);
   loadCommunity();
   if (location.hash === '#feedback') showFeedback();

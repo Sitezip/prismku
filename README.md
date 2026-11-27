@@ -20,6 +20,7 @@ spoiler-free share grids.
 - **Dare a friend:** every Free play board has a challenge link (`prismku.com/c/<code>`) that loads the exact puzzle with your time to beat; the Worker gives it its own link preview (“Can you beat 1:23 on this Prismku Hard 6×6?”)
 - 🎞️ Solve replay: after a win, watch your whole solve again on a mini board, sped up, wrong turns and hints included
 - ⚡ Quick Draw reaction mode at `/quick-draw/`
+- 🗂️ **Daily archive** at `/daily/`: a server-rendered, indexable page for every daily (`/daily/<YYYY-MM-DD>/`) with all four boards, a “Play this puzzle” deep link (`/?replay=<day>&mode=<mode>`) and hidden solutions for past days; its own sitemap at `/daily/sitemap.xml`
 - 🖨️ Printable worksheets at `/printable/` (every size, color or low-ink crayon style, answer keys, play-online links)
 - ⚡ Uncapped scoring: base × par ÷ time, with Overdrive past 2.5× par ([how scoring works](https://prismku.com/how-to-play/#scoring))
 - PWA (installable, offline), OG/Twitter cards, JSON-LD, sitemap

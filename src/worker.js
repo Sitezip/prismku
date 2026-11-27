@@ -4,6 +4,7 @@ import { checkClock, minSolveMs } from './clock.js';
 import { qdStart, qdReveal, qdFinish, qdLeaderboard } from './quickdraw.js';
 import { FIX_FROM, isValidEmail, planFixUpdate, renderFixEmail } from './feedback-mail.js';
 import { challengeFromLocation, challengeTitle } from '../client/challenge.js';
+import { archiveResponse } from './archive.js';
 
 const LAUNCH_DAY = '2026-10-31';
 const NICK_RE = /^[A-Za-z0-9 _.\-]{2,16}$/;
@@ -465,6 +466,7 @@ export default {
       }
     }
     if (url.pathname.startsWith('/c/')) return challengePage(request, env, url);
+    if (url.pathname === '/daily' || url.pathname.startsWith('/daily/')) return archiveResponse(request, env, url, { launch: LAUNCH_DAY, today: utcDay(), dayNumber });
     return env.ASSETS.fetch(request);
   },
   async scheduled(event, env, ctx) {

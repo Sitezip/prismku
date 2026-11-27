@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
 Sitemap: https://prismku.com/sitemap.xml
+Sitemap: https://prismku.com/daily/sitemap.xml

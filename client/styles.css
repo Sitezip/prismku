@@ -72,7 +72,7 @@ body.cb .cell.filled svg{opacity:1}
 .pause-veil{position:absolute;inset:8px;border-radius:15px;background:rgba(10,5,30,.92);display:grid;place-items:center}
 .pause-veil button{font-size:20px;padding:12px 24px;border-radius:14px;border:0;background:var(--accent);color:#222;font-weight:700}
 .palette{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:var(--board)}
-.swatch{width:clamp(36px,calc(var(--board) / 7),56px);aspect-ratio:1;border-radius:50%;border:3px solid rgba(255,255,255,.25);background:var(--col);display:grid;place-items:center;position:relative;
+.swatch{touch-action:manipulation;width:clamp(36px,calc(var(--board) / 7),56px);aspect-ratio:1;border-radius:50%;border:3px solid rgba(255,255,255,.25);background:var(--col);display:grid;place-items:center;position:relative;
   box-shadow:0 0 12px color-mix(in srgb,var(--col) 60%,transparent);transition:transform .12s}
 .swatch:active{transform:scale(.9)}
 .swatch.brush{border-color:#fff;border-width:4px;transform:scale(1.12);box-shadow:0 0 22px var(--col)}
